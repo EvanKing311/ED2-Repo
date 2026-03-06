@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+
+{% block title %}Experiments - EGN Site{% endblock %}
+
+{% block extra_css %}
+<style>
+    .experiment-card {
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid #dee2e6;
+        height: 100%;
+    }
+    
+    .experiment-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        border-color: #0d6efd;
+    }
+    
+    .experiment-card.active {
+        background-color: #e7f3ff;
+        border-color: #0d6efd;
+    }
+    
+    .experiment-card .card-body {
+        padding: 30px;
+        text-align: center;
+    }
+        
+    .experiment-title {
+        font-size: 1.3rem;
+        font-weight: bold;
+        color: #212529;
+    }
+    
+    .coming-soon {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    .coming-soon:hover {
+        transform: none;
+        box-shadow: none;
+        border-color: #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <h1 class="mb-2">Gantry Crane Pendulum Experiments</h1>
+            <p class="text-muted">Select an experiment to begin</p>
+        </div>
+    </div>
+
+    <!-- Experiment Selection Grid -->
+    <div class="row g-4">
+        <!-- Experiment 1: Cart Control -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="experiment-card card shadow-sm coming-soon">
+                <div class="card-body">
+                    <h5 class="experiment-title">Cart Control</h5>
+                </div>
+            </div>
+        </div>
+
+        <!-- Experiment 2: Cart Ident -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="experiment-card card shadow-sm coming-soon">
+                <div class="card-body">
+                    <h5 class="experiment-title">Cart Ident</h5>
+                </div>
+            </div>
+        </div>
+
+        <!-- Experiment 3: Crane Ident -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="experiment-card card shadow-sm coming-soon">
+                <div class="card-body">
+                    <h5 class="experiment-title">Crane Ident</h5>
+                </div>
+            </div>
+        </div>
+
+        <!-- Experiment 4: Crane Stab -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="experiment-card card shadow-sm coming-soon">
+                <div class="card-body">
+                    <h5 class="experiment-title">Crane Stab</h5>
+                </div>
+            </div>
+        </div>
+
+        <!-- Experiment 5: InvPend Ident -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="experiment-card card shadow-sm coming-soon">
+                <div class="card-body">
+                    <h5 class="experiment-title">InvPend Ident</h5>
+                </div>
+            </div>
+        </div>
+
+        <!-- Experiment 6: Pendstab PD -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="experiment-card card shadow-sm coming-soon">
+                <div class="card-body">
+                    <h5 class="experiment-title">Pendstab PD</h5>
+                </div>
+            </div>
+        </div>
+
+        <!-- Experiment 7: Pend Swing Up -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="experiment-card card shadow-sm coming-soon">
+                <div class="card-body">
+                    <h5 class="experiment-title">Pend Swing Up</h5>
+                </div>
+            </div>
+        </div>
+
+        <!-- Experiment 8: Pendulum Friction -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="experiment-card card shadow-sm coming-soon">
+                <div class="card-body">
+                    <h5 class="experiment-title">Pendulum Friction</h5>
+                </div>
+            </div>
+        </div>
+
+        <!-- Experiment 9: SwingHoldPendulum - ACTIVE FOR DEMO -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <a href="{% url 'experiment_run_dynamic' 'SwingHoldPendulum' %}" class="text-decoration-none">
+                <div class="experiment-card card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="experiment-title">Swing Hold Pendulum</h5>
+                        <span class="badge bg-success">Available</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Experiment 10: SwingHoldPendulum Extra -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="experiment-card card shadow-sm coming-soon">
+                <div class="card-body">
+                    <h5 class="experiment-title">Swing Hold Pendulum Extra</h5>
+                </div>
+            </div>
+        </div>
+
+        <!-- Experiment 11: UpDown Pendulum -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="experiment-card card shadow-sm coming-soon">
+                <div class="card-body">
+                    <h5 class="experiment-title">UpDown Pendulum</h5>
+                </div>
+            </div>
+        </div>
+
+        <!-- Experiment 12: Pendulum Test -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="experiment-card card shadow-sm coming-soon">
+                <div class="card-body">
+                    <h5 class="experiment-title">Pendulum Test</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Status Footer -->
+    <div class="row mt-5 mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <h6 class="text-muted">Available Experiments</h6>
+                            <h5 class="text-primary">1 of 12</h5>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="text-muted">Quick Access</h6>
+                            <a href="{% url 'data' %}" class="btn btn-outline-primary">
+                                 View Data History
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-refresh status every 30 seconds
+setTimeout(function() {
+    location.reload();
+}, 30000);
+</script>
+{% endblock %}

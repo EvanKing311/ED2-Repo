@@ -1,0 +1,24 @@
+from django.contrib import admin
+from django.urls import path
+from accounts import views as accounts_views
+from . import views
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    # Authentication URLs
+    path('login/', accounts_views.login_view, name='login'),
+    path('register/', accounts_views.register, name='register'),
+    path('logout/', accounts_views.logout_view, name='logout'),
+    
+    # Main App URLs
+    path('dashboard/', views.dashboard, name='dashboard'),
+    path('data_history/', views.data_history, name='data'),
+
+    #Camera Stream
+    path('camera/stream/', views.camera_proxy, name='camera_proxy'),
+    
+    path('experiment/<str:experiment_name>/', views.experiment_run_dynamic, name='experiment_run_dynamic'),
+    path('experiment/<str:experiment_name>/command/', views.send_experiment_command, name='send_experiment_command'),
+    path('experiment/<str:experiment_name>/params/', views.update_experiment_params, name='update_experiment_params'),
+    path('experiment/<str:experiment_name>/defaults/', views.get_experiment_defaults, name='get_experiment_defaults'),
+]

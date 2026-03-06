@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block title %}Login - Remote Gantry Crane Control{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white text-center">
+                <h3 class="mb-0">🔐 Login</h3>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST">
+                    {% csrf_token %}
+                    
+                    <!-- Username Field -->
+                    <div class="mb-3">
+                        <label for="id_username" class="form-label">Username</label>
+                        <input type="text" 
+                               name="username" 
+                               id="id_username" 
+                               class="form-control form-control-lg" 
+                               placeholder="Enter your username" 
+                               required 
+                               autofocus>
+                    </div>
+                    
+                    <!-- Password Field -->
+                    <div class="mb-3">
+                        <label for="id_password" class="form-label">Password</label>
+                        <input type="password" 
+                               name="password" 
+                               id="id_password" 
+                               class="form-control form-control-lg" 
+                               placeholder="Enter your password" 
+                               required>
+                    </div>
+                    
+                    <!-- Login Button -->
+                    <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">
+                        Login
+                    </button>
+                    
+                    <!-- Error Messages -->
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <strong>Login failed!</strong> Please check your username and password.
+                    </div>
+                    {% endif %}
+                </form>
+            </div>
+            <div class="card-footer text-center bg-light">
+                <p class="mb-0">Don't have an account? 
+                    <a href="{% url 'register' %}" class="btn btn-outline-secondary btn-sm">Register here</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

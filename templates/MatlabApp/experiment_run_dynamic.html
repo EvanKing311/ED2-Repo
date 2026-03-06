@@ -1,0 +1,435 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ experiment_name }} - EGN Site{% endblock %}
+
+{% block extra_css %}
+<style>
+    .camera-feed-container {
+        background-color: #000;
+        border-radius: 8px;
+        overflow: hidden;
+        position: relative;
+        height: 82vh;
+        max-width: 635px;
+        margin: 0 auto;
+     }
+    
+    .camera-feed-container iframe {
+        width: 180%;
+        height: 180%;  
+        border: none;
+        display: block;
+        transform: translate(-1%, -7.75%);  /* Shift left 1% of page and up 7.75% */
+        transform-origin: top left;
+    }
+    
+    .camera-card {
+        max-width: 635px;
+        margin: 0 auto;
+    }
+    .control-btn {
+        font-size: 1.2rem;
+        padding: 18px;
+        font-weight: bold;
+        border-radius: 8px;
+    }
+    
+    .param-input {
+        font-size: 1.1rem;
+        padding: 10px;
+    }
+    
+    .disabled-overlay {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header with Back Button -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary mb-2">
+                ← Back to Experiments
+            </a>
+            <h2 class="mb-1">{{ experiment_name }}</h2>
+            <p class="text-muted">Configure parameters and run the experiment</p>
+        </div>
+    </div>
+
+    <!-- Camera Feed - Full Width -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow camera-card">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">🔴 Live Camera Feed</h5>
+                    <span class="badge bg-success" id="streamStatus">LIVE</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="camera-feed-container">
+                        <video id="cameraStream" 
+                            controls 
+                            autoplay 
+                            muted
+                            playsinline
+                            style="width: 100%; height: 100%; object-fit: contain;">
+                        </video>
+                        <div id="streamError" class="text-center p-5" style="display: none; background-color: #1a1a1a; position: absolute; top: 0; left: 0; right: 0; bottom: 0;">
+                            <p class="text-light mb-3"> Camera feed unavailable</p>
+                            <button class="btn btn-sm btn-primary" onclick="reloadStream()">
+                                🔄 Retry
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls and Parameters Row -->
+    <div class="row">
+        <!-- Left Column: Experiment Controls -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Experiment Controls</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="controlForm">
+                        {% csrf_token %}
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <button type="button" 
+                                        class="btn btn-success w-100 control-btn" 
+                                        id="startBtn"
+                                        onclick="startExperiment()">
+                                    ▶️ START
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <button type="button" 
+                                        class="btn btn-danger w-100 control-btn" 
+                                        id="stopBtn"
+                                        onclick="stopExperiment()">
+                                    ⏹️ STOP
+                                </button>
+                            </div>
+                            <div class="col-12">
+                                <button type="button" 
+                                        class="btn btn-secondary w-100 control-btn" 
+                                        id="recenterBtn"
+                                        onclick="recenterExperiment()">
+                                    🔄 RECENTER
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info mt-3 mb-0">
+                            <small>
+                                <strong>Note:</strong> Parameters and recenter button are disabled while experiment is running.
+                            </small>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Dynamic Parameters (changes every experiment)-->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow" id="parametersCard">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Experiment Parameters</h5>
+                    <span class="badge bg-light text-dark" id="paramStatus">Ready</span>
+                </div>
+                <div class="card-body" id="parametersBody">
+                    {% if parameters %}
+                    <form method="POST" id="paramForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update_parameters">
+
+                        <!-- Show each parameter for individual experiment selected -->
+                        {% for param_key, param_config in parameters.items %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                {{ param_key|title }}
+                                {% if param_config.unit %}
+                                    <small class="text-muted">({{ param_config.unit }})</small>
+                                {% endif %}
+                            </label>
+                            
+                            {% if param_config.editable %}
+                                <!-- Editable parameters -->
+                                <input type="text" 
+                                       class="form-control param-input" 
+                                       name="{{ param_key }}" 
+                                       id="{{ param_key }}"
+                                       value="{{ param_config.value }}" 
+                                       data-default="{{ param_config.value }}"
+                                       required>
+                                <small class="text-muted">Default: {{ param_config.value }}</small>
+                            {% else %}
+                                <!-- Read-only parameters -->
+                                <input type="text" 
+                                       class="form-control param-input bg-light" 
+                                       name="{{ param_key }}" 
+                                       id="{{ param_key }}"
+                                       value="{{ param_config.value }}" 
+                                       data-default="{{ param_config.value }}"
+                                       readonly
+                                       disabled
+                                       style="cursor: not-allowed; opacity: 0.6;">
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+
+                        <div class="d-grid gap-2">
+                            <button type="button" 
+                                    class="btn btn-primary btn-lg" 
+                                    onclick="updateParameters()">
+                                  Update Parameters
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-outline-secondary" 
+                                    onclick="restoreDefaults()">
+                                🔄 Restore Defaults
+                            </button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <strong>No parameters configured</strong>
+                        <p class="mb-0">This experiment has no adjustable parameters.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status and Recent Activity -->
+    <div class="row">
+        <div class="col-lg-6 mb-3">
+            <div class="card shadow">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0">Recent Commands</h6>
+                </div>
+                <div class="card-body" style="max-height: 150px; overflow-y: auto;">
+                    {% if recent_commands %}
+                        {% for cmd in recent_commands|slice:":5" %}
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <code>{{ cmd.command }}</code>
+                            <small class="text-muted">{{ cmd.timestamp|date:"H:i:s" }}</small>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted mb-0">No commands yet</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-3">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">Data Readings</h6>
+                </div>
+                <div class="card-body" style="max-height: 150px; overflow-y: auto;">
+                    {% if raspi_messages %}
+                        {% for msg in raspi_messages|slice:":5" %}
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <small>{{ msg.message }}</small>
+                            <small class="text-muted">{{ msg.timestamp|date:"H:i:s" }}</small>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted mb-0">No messages</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+<script>
+let experimentRunning = false;
+
+function startExperiment() {
+    experimentRunning = true;
+    updateUIState();
+    sendCommand('start');
+    
+    document.getElementById('paramStatus').textContent = 'Running';
+    document.getElementById('paramStatus').classList.remove('bg-light', 'text-dark');
+    document.getElementById('paramStatus').classList.add('bg-warning', 'text-dark');
+}
+
+function stopExperiment() {
+    experimentRunning = false;
+    updateUIState();
+    sendCommand('stop');
+    
+    document.getElementById('paramStatus').textContent = 'Stopped';
+    document.getElementById('paramStatus').classList.remove('bg-warning');
+    document.getElementById('paramStatus').classList.add('bg-light', 'text-dark');
+}
+
+function recenterExperiment() {
+    if (!experimentRunning) {
+        sendCommand('reset');
+    }
+}
+
+function updateUIState() {
+    const parametersBody = document.getElementById('parametersBody');
+    const recenterBtn = document.getElementById('recenterBtn');
+    
+    if (experimentRunning) {
+        parametersBody.classList.add('disabled-overlay');
+        recenterBtn.disabled = true;
+        recenterBtn.classList.add('disabled');
+    } else {
+        parametersBody.classList.remove('disabled-overlay');
+        recenterBtn.disabled = false;
+        recenterBtn.classList.remove('disabled');
+    }
+}
+
+function sendCommand(command) {
+    fetch('{% url "send_experiment_command" experiment_name %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            command: command
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Command sent:', data);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+
+function updateParameters() {
+    if (experimentRunning) {
+        alert('Cannot update parameters while experiment is running. Please stop the experiment first.');
+        return;
+    }
+    
+    const formData = new FormData(document.getElementById('paramForm'));
+    const params = {};
+    
+    formData.forEach((value, key) => {
+        if (key !== 'action' && key !== 'csrfmiddlewaretoken') {
+            params[key] = value;
+        }
+    });
+    
+    fetch('{% url "update_experiment_params" experiment_name %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            parameters: params
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Updated parameters:', data);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error updating parameters');
+    });
+}
+
+function restoreDefaults() {
+    if (experimentRunning) {
+        alert('Cannot restore defaults while experiment is running.');
+        return;
+    }
+
+    document.querySelectorAll('.param-input').forEach(input => {
+        const defaultValue = input.getAttribute('data-default');
+        if (defaultValue) {
+            input.value = defaultValue;
+        }
+    });
+
+    //Save defaults
+    updateParameters();
+}
+
+// Camera / HLS stream
+function initStream() {
+    const video = document.getElementById('cameraStream');
+    const streamUrl = '/stream/stream.m3u8';
+
+    if (Hls.isSupported()) {
+        const hls = new Hls({
+            liveSyncDurationCount: 3,
+            liveMaxLatencyDurationCount: 6,
+        });
+        hls.loadSource(streamUrl);
+        hls.attachMedia(video);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, function() {
+            video.play();
+            document.getElementById('streamStatus').textContent = 'LIVE';
+            document.getElementById('streamStatus').classList.remove('bg-danger', 'bg-warning');
+            document.getElementById('streamStatus').classList.add('bg-success');
+        });
+
+        hls.on(Hls.Events.ERROR, function(event, data) {
+            if (data.fatal) {
+                document.getElementById('streamStatus').textContent = 'OFFLINE';
+                document.getElementById('streamStatus').classList.remove('bg-success', 'bg-warning');
+                document.getElementById('streamStatus').classList.add('bg-danger');
+                document.getElementById('streamError').style.display = 'block';
+            }
+        });
+
+        // Store hls instance for retry
+        window.hlsInstance = hls;
+
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari/iOS)
+        video.src = streamUrl;
+        video.play();
+    }
+}
+
+//Video Feed Functions
+function reloadStream() {
+    if (window.hlsInstance) {
+        window.hlsInstance.destroy();
+    }
+    document.getElementById('streamError').style.display = 'none';
+    document.getElementById('streamStatus').textContent = 'LOADING...';
+    document.getElementById('streamStatus').classList.remove('bg-danger', 'bg-success');
+    document.getElementById('streamStatus').classList.add('bg-warning');
+    initStream();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initStream();
+});
+
+// Initialize UI state
+updateUIState();
+
+</script>
+{% endblock %}
