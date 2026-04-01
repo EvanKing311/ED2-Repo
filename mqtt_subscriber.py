@@ -16,9 +16,10 @@ import paho.mqtt.client as mqtt
 from MatlabApp.models import Message
 
 #setup MQTT
-BROKER = "localhost"
-PORT = 1883
+BROKER = "sciencelabtoyou.com"
+PORT = 1885
 TOPIC = "raspi/to_django"
+allow_anonymous = True
 
 #when client connects
 def on_connect(client, userdata, flags, rc):

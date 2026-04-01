@@ -15,10 +15,17 @@ urlpatterns = [
     path('data_history/', views.data_history, name='data'),
 
     #Camera Stream
-    path('camera/stream/', views.camera_proxy, name='camera_proxy'),
-    
+    path('live/', views.pendulum_stream, name='pendulum_stream'),
+
+    #experimets
     path('experiment/<str:experiment_name>/', views.experiment_run_dynamic, name='experiment_run_dynamic'),
     path('experiment/<str:experiment_name>/command/', views.send_experiment_command, name='send_experiment_command'),
     path('experiment/<str:experiment_name>/params/', views.update_experiment_params, name='update_experiment_params'),
     path('experiment/<str:experiment_name>/defaults/', views.get_experiment_defaults, name='get_experiment_defaults'),
+
+    #Control Lock URLs
+    path('control/acquire/', views.acquire_lock, name='acquire_lock'),
+    path('control/release/', views.release_lock, name='release_lock'),
+    path('control/heartbeat/', views.heartbeat, name='heartbeat'),
+    path('control/status/', views.lock_status, name='lock_status'),
 ]

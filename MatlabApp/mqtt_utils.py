@@ -1,16 +1,13 @@
 import paho.mqtt.publish as publish
 import json
 
-BROKER_HOST = "172.20.10.2"
-BROKER_PORT = 1883
-TOPIC = "django/to_raspi"
+BROKER_HOST = "127.0.0.1"
+BROKER_PORT = 1885
+TOPIC = "pendulum/cmd"
 allow_anoynmous = True
 
 def send_command(payload, user):
-    """
-    Send payload to Raspberry Pi.
-    Accepts either a string command OR full JSON dict.
-    """
+#Send payload as either JSON or plain string to MQTT broker depending on the command
 
     # If payload is just a string, wrap it
     if isinstance(payload, str):
@@ -19,8 +16,8 @@ def send_command(payload, user):
         }
 
     # Attach user info
-    payload["user_id"] = user.id
-    payload["username"] = user.username
+    #payload["user_id"] = user.id
+    #payload["username"] = user.username
 
     try:
         publish.single(

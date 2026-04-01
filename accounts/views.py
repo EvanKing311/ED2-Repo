@@ -31,5 +31,11 @@ def login_view(request):
 #Django built-in logout
 @login_required
 def logout_view(request):
+    #Clear any active control locks for this user when they log out
+    from MatlabApp.models import ControlLock
+    ControlLock.objects.filter(
+        session_key=request.session.session_key
+    ).delete()
+    
     logout(request)
     return redirect('login')
