@@ -45,6 +45,16 @@ ALLOWED_HOSTS = [
 ]
 
 
+
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [('127.0.0.1', 6379)],
+        },
+    },
+}
 # Application definition
 
 INSTALLED_APPS = [
@@ -57,6 +67,7 @@ INSTALLED_APPS = [
     'MatlabApp',
     'accounts', 
     #'bootstrap5',	
+    'channels',
 ]
 
 MIDDLEWARE = [
@@ -86,6 +97,8 @@ TEMPLATES = [
     },
 ]
 
+#HTTP and web sockets
+ASGI_APPLICATION = 'EGNSite.asgi.application'
 WSGI_APPLICATION = 'EGNSite.wsgi.application'
 
 

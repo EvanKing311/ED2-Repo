@@ -96,7 +96,13 @@ EXPERIMENT_DEFAULTS = {
         }
     },
     #Other experiments for later
-    'CartControl': {},
+    'CartControl': {
+        'parameters': {
+            'proportional': {'value': 27.8, 'editable': True, 'unit': 'kg'},
+            'integral': {'value': 50.0, 'editable': True, 'unit': 'kg/s'},
+            'derivative': {'value': 3.9, 'editable': True, 'unit': 'kg⋅s'}
+        }
+    },
     'CartIdent': {},
     'CraneIdent': {},
     'CraneStab': {},
@@ -182,7 +188,7 @@ def send_experiment_command(request, experiment_name):
                 try:
                     session = ExperimentSession.objects.get(
                         experiment_name=experiment_name,
-                        user=request.user
+                        #user=request.user
                     )
                     payload["parameters"] = session.parameters
                 except ExperimentSession.DoesNotExist:
@@ -194,10 +200,10 @@ def send_experiment_command(request, experiment_name):
 
         cmd_obj = Command.objects.create(
             command=command,
-            user=request.user
+            #user=request.user
         )
 
-        success = send_command(payload, request.user)
+        success = send_command(payload)
 
         cmd_obj.success = success
         cmd_obj.save()
@@ -237,7 +243,7 @@ def update_experiment_params(request, experiment_name):
         # Log update action
         Command.objects.create(
             command=f'Parameters updated for {experiment_name}',
-            user=request.user,
+            #user=request.user,
         )
 
         return JsonResponse({

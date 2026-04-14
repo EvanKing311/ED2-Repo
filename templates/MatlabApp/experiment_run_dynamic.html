@@ -120,6 +120,12 @@
         font-weight: bold;
         border-radius: 8px;
     }
+
+    /* Live charts */
+    .chart-wrapper {
+        position: relative;
+        height: 200px;
+    }
 </style>
 {% endblock %}
 
@@ -149,7 +155,6 @@
                 <div class="card-body p-0">
                     <div class="camera-feed-container">
                         <video id="cameraStream" 
-                            controls 
                             autoplay 
                             muted
                             playsinline
@@ -314,11 +319,35 @@
             </div>
         </div>
     </div>
+
+    <!-- Live Charts -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Live Data</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <span id="wsStatus" class="badge bg-secondary">Connecting...</span>
+                        <button class="btn btn-sm btn-outline-light" onclick="clearCharts()">Clear</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Charts are dynamically created here based on incoming data keys -->
+                    <div id="chartsContainer" class="row">
+                        <p class="text-muted text-center mt-2" id="chartsPlaceholder">
+                            Waiting for data from the experiment...
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
 // ─────────────────────────────────────────────
@@ -666,58 +695,212 @@ function restoreDefaults() {
 }
 
 // ─────────────────────────────────────────────
-//  Camera / HLS stream
+//  Camera / HLS stream --> replaced with webrtc
 // ─────────────────────────────────────────────
 function initStream() {
-    const video = document.getElementById('cameraStream');
-    const streamUrl = '/stream/stream.m3u8';
+	const video = document.getElementById('cameraStream');
+	document.getElementById('streamError').style.display = 'none';
+	document.getElementById('streamStatus').textContent = 'CONNECTING...';
+	document.getElementById('streamStatus').className = 'badge bg-warning';
 
-    if (Hls.isSupported()) {
-        const hls = new Hls({
-            enableWorker: true,
-            lowLatencyMode: true,
-            liveSyncDurationCount: 1,
-            liveMaxLatencyDurationCount: 2,
-            latencyController: true,
-            maxLiveSyncPlaybackRate: 1.5,
-        });
-        hls.loadSource(streamUrl);
-        hls.attachMedia(video);
+	const pc = new RTCPeerConnection();
+	pc.addTransceiver('video', { direction: 'recvonly' });
 
-        hls.on(Hls.Events.MANIFEST_PARSED, function() {
-            video.play();
-            document.getElementById('streamStatus').textContent = 'LIVE';
-            document.getElementById('streamStatus').classList.remove('bg-danger', 'bg-warning');
-            document.getElementById('streamStatus').classList.add('bg-success');
-        });
+	pc.addEventListener('track', (evt) => {
+		if (evt.receiver) {
+			try { evt.receiver.jitterBufferTarget = 0; } catch(e) {}
+		}
+		video.srcObject = evt.streams[0];
+		video.play();
+		document.getElementById('streamStatus').textContent = 'LIVE';
+		document.getElementById('streamStatus').className = 'badge bg-success';
+	});
+	
+	pc.addEventListener('connectionstatechange', () => {
+		if (['failed', 'disconnected'].includes(pc.connectionState)) {
+			document.getElementById('streamStatus').textContent = 'OFFLINE';
+			document.getElementById('streamStatus').className = 'badge bg-danger';
+			setTimeout(() => {
+				if(window.peerConnection) { window.peerConnection.close(); }
+				initStream();
+			}, 2000);
+		}
+	});
 
-        hls.on(Hls.Events.ERROR, function(event, data) {
-            if (data.fatal) {
-                document.getElementById('streamStatus').textContent = 'OFFLINE';
-                document.getElementById('streamStatus').classList.remove('bg-success', 'bg-warning');
-                document.getElementById('streamStatus').classList.add('bg-danger');
-                document.getElementById('streamError').style.display = 'block';
-            }
-        });
-
-        window.hlsInstance = hls;
-
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Native HLS support (Safari / iOS)
-        video.src = streamUrl;
-        video.play();
-    }
+	pc.createOffer()
+		.then(offer => pc.setLocalDescription(offer))
+		.then(() => fetch('/stream/whep/', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/sdp' },
+			body: pc.localDescription.sdp
+		}))
+		.then(r => r.text())
+		.then(sdp => pc.setRemoteDescription({ type: 'answer', sdp }))
+		.catch(err => {
+			console.error('WebRTC error:', err);
+			document.getElementById('streamStatus').textContent = 'OFFLINE';
+			document.getElementById('streamStatus').className = 'badge bg-danger';
+			document.getElementById('streamError').style.display = 'block';
+		});
+		
+	window.peerConnection = pc;
 }
 
 function reloadStream() {
-    if (window.hlsInstance) {
-        window.hlsInstance.destroy();
+	if (window.peerConnection) { window.peerConnection.close(); }
+	initStream();
+}
+
+// ─────────────────────────────────────────────
+//  Live charts — dynamic, key-driven
+// ─────────────────────────────────────────────
+const MAX_POINTS = 200; // rolling window of data points per chart
+
+// Map of key → Chart.js instance, created on first data arrival
+const activeCharts = {};
+
+// Colors assigned in order to each new key that appears
+const CHART_COLORS = [
+    '#0d6efd', // blue
+    '#198754', // green
+    '#dc3545', // red
+    '#fd7e14', // orange
+    '#6f42c1', // purple
+    '#20c997', // teal
+];
+let colorIndex = 0;
+
+function createChart(key) {
+    // Remove placeholder text on first chart creation
+    const placeholder = document.getElementById('chartsPlaceholder');
+    if (placeholder) placeholder.remove();
+
+    // Create a col div containing a canvas
+    const container = document.getElementById('chartsContainer');
+    const col = document.createElement('div');
+    col.className = 'col-md-6 mb-3';
+    col.id = `chart-col-${key}`;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'chart-wrapper';
+
+    const canvas = document.createElement('canvas');
+    canvas.id = `chart-${key}`;
+    wrapper.appendChild(canvas);
+    col.appendChild(wrapper);
+    container.appendChild(col);
+
+    // Pick next color
+    const color = CHART_COLORS[colorIndex % CHART_COLORS.length];
+    colorIndex++;
+
+    // Format the key as a readable label (underscores → spaces, title case)
+    const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+    const chart = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: label,
+                data: [],
+                borderColor: color,
+                borderWidth: 1.5,
+                pointRadius: 0,
+                tension: 0.3,
+                fill: false,
+            }]
+        },
+        options: {
+            animation: false,
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    display: true,
+                    title: { display: true, text: 'Time (s)' },
+                    ticks: { maxTicksLimit: 8 }
+                },
+                y: {
+                    display: true,
+                    title: { display: true, text: label }
+                }
+            },
+            plugins: {
+                legend: { display: true }
+            }
+        }
+    });
+
+    activeCharts[key] = chart;
+}
+
+function pushToChart(chart, t, value) {
+    chart.data.labels.push(t);
+    chart.data.datasets[0].data.push(value);
+
+    // Rolling window — drop oldest point when limit reached
+    if (chart.data.labels.length > MAX_POINTS) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
     }
-    document.getElementById('streamError').style.display = 'none';
-    document.getElementById('streamStatus').textContent = 'LOADING...';
-    document.getElementById('streamStatus').classList.remove('bg-danger', 'bg-success');
-    document.getElementById('streamStatus').classList.add('bg-warning');
-    initStream();
+
+    chart.update('none'); // skip animation for speed
+}
+
+function clearCharts() {
+    Object.values(activeCharts).forEach(chart => {
+        chart.data.labels = [];
+        chart.data.datasets[0].data = [];
+        chart.update('none');
+    });
+}
+
+// ─────────────────────────────────────────────
+//  WebSocket — receives sensor data from server
+// ─────────────────────────────────────────────
+let sensorSocket = null;
+
+function initWebSocket() {
+    const wsUrl = 'wss://' + window.location.host + '/ws/sensor/';
+    sensorSocket = new WebSocket(wsUrl);
+
+    sensorSocket.onopen = function() {
+        document.getElementById('wsStatus').textContent = 'Connected';
+        document.getElementById('wsStatus').className = 'badge bg-success';
+    };
+
+    sensorSocket.onclose = function() {
+        document.getElementById('wsStatus').textContent = 'Disconnected';
+        document.getElementById('wsStatus').className = 'badge bg-danger';
+        // Reconnect after 3 seconds
+        setTimeout(initWebSocket, 3000);
+    };
+
+    sensorSocket.onerror = function() {
+        document.getElementById('wsStatus').textContent = 'Error';
+        document.getElementById('wsStatus').className = 'badge bg-danger';
+    };
+
+    sensorSocket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+
+        // Skip plain string messages wrapped as {raw: ...}
+        if (data.raw !== undefined) return;
+
+        // Use 'time' field as x axis if present, otherwise use arrival timestamp
+        const t = data.time !== undefined ? data.time : new Date().toLocaleTimeString();
+
+        // Dynamically create a chart for every numeric key except 'time'
+        Object.entries(data).forEach(([key, value]) => {
+            if (key === 'time') return;
+            if (typeof value !== 'number') return;
+            if (!activeCharts[key]) {
+                createChart(key);
+            }
+            pushToChart(activeCharts[key], t, value);
+        });
+    };
 }
 
 // ─────────────────────────────────────────────
@@ -736,6 +919,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initStream();
     acquireLock();       // Try to take control; falls back to view-only automatically
     updateUIState();     // Set initial button states
+    initWebSocket();     // Connect to live data WebSocket
 });
 </script>
 {% endblock %}

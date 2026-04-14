@@ -6,7 +6,7 @@ BROKER_PORT = 1885
 TOPIC = "pendulum/cmd"
 allow_anoynmous = True
 
-def send_command(payload, user):
+def send_command(payload):
 #Send payload as either JSON or plain string to MQTT broker depending on the command
 
     # If payload is just a string, wrap it

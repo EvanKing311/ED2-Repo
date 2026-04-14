@@ -60,11 +60,14 @@
     <div class="row g-4">
         <!-- Experiment 1: Cart Control -->
         <div class="col-lg-3 col-md-4 col-sm-6">
-            <div class="experiment-card card shadow-sm coming-soon">
-                <div class="card-body">
-                    <h5 class="experiment-title">Cart Control</h5>
+            <a href="{% url 'experiment_run_dynamic' 'CartControl' %}" class="text-decoration-none">
+                <div class="experiment-card card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="experiment-title">Cart Control</h5>
+                        <span class="badge bg-success">Available</span>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
 
         <!-- Experiment 2: Cart Ident -->
@@ -130,7 +133,7 @@
             </div>
         </div>
 
-        <!-- Experiment 9: SwingHoldPendulum - ACTIVE FOR DEMO -->
+        <!-- Experiment 9: SwingHoldPendulum  -->
         <div class="col-lg-3 col-md-4 col-sm-6">
             <a href="{% url 'experiment_run_dynamic' 'SwingHoldPendulum' %}" class="text-decoration-none">
                 <div class="experiment-card card shadow-sm">
