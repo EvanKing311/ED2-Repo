@@ -107,6 +107,19 @@
         text-align: center;
     }
 
+    /* PID group header */
+    .param-group-header {
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6c757d;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 3px;
+        margin-top: 0.6rem;
+        margin-bottom: 0.4rem;
+    }
+
     /* Thin controls bar */
     .controls-bar {
         display: flex;
@@ -218,39 +231,79 @@
                         {% csrf_token %}
                         <input type="hidden" name="action" value="update_parameters">
 
-                        <!-- Show each parameter for individual experiment selected -->
                         {% for param_key, param_config in parameters.items %}
-                        <div class="param-row">
-                            <label class="param-label" for="{{ param_key }}">
-                                {{ param_key|title }}
-                                {% if param_config.unit %}
-                                    <small class="text-muted">({{ param_config.unit }})</small>
-                                {% endif %}
-                            </label>
-                            
-                            {% if param_config.editable %}
-                                <input type="text" 
-                                       class="form-control param-input" 
-                                       name="{{ param_key }}" 
-                                       id="{{ param_key }}"
-                                       value="{{ param_config.value }}" 
-                                       data-default="{{ param_config.value }}"
-                                       required>
+
+                            {% if param_config.value is not None or param_config.editable is not None %}
+                                <!-- FLAT parameter (has value/editable keys directly) -->
+                                <div class="param-row">
+                                    <label class="param-label" for="{{ param_key }}">
+                                        {{ param_key|title }}
+                                        {% if param_config.unit %}
+                                            <small class="text-muted">({{ param_config.unit }})</small>
+                                        {% endif %}
+                                    </label>
+
+                                    {% if param_config.editable %}
+                                        <input type="text"
+                                               class="form-control param-input"
+                                               name="{{ param_key }}"
+                                               id="{{ param_key }}"
+                                               value="{{ param_config.value }}"
+                                               data-default="{{ param_config.value }}"
+                                               required>
+                                    {% else %}
+                                        <input type="text"
+                                               class="form-control param-input bg-light"
+                                               name="{{ param_key }}"
+                                               id="{{ param_key }}"
+                                               value="{{ param_config.value }}"
+                                               data-default="{{ param_config.value }}"
+                                               readonly
+                                               disabled
+                                               style="cursor: not-allowed; opacity: 0.6;">
+                                    {% endif %}
+                                </div>
+
                             {% else %}
-                                <input type="text" 
-                                       class="form-control param-input bg-light" 
-                                       name="{{ param_key }}" 
-                                       id="{{ param_key }}"
-                                       value="{{ param_config.value }}" 
-                                       data-default="{{ param_config.value }}"
-                                       readonly
-                                       disabled
-                                       style="cursor: not-allowed; opacity: 0.6;">
+                                <!-- NESTED group (e.g. PID_D, PID_D1) -->
+                                <div class="param-group-header">{{ param_key }}</div>
+
+                                {% for sub_key, sub_config in param_config.items %}
+                                <div class="param-row">
+                                    <label class="param-label" for="{{ param_key }}_{{ sub_key }}">
+                                        {{ sub_key|title }}
+                                        {% if sub_config.unit %}
+                                            <small class="text-muted">({{ sub_config.unit }})</small>
+                                        {% endif %}
+                                    </label>
+
+                                    {% if sub_config.editable %}
+                                        <input type="text"
+                                               class="form-control param-input"
+                                               name="{{ param_key }}_{{ sub_key }}"
+                                               id="{{ param_key }}_{{ sub_key }}"
+                                               value="{{ sub_config.value }}"
+                                               data-default="{{ sub_config.value }}"
+                                               required>
+                                    {% else %}
+                                        <input type="text"
+                                               class="form-control param-input bg-light"
+                                               name="{{ param_key }}_{{ sub_key }}"
+                                               id="{{ param_key }}_{{ sub_key }}"
+                                               value="{{ sub_config.value }}"
+                                               data-default="{{ sub_config.value }}"
+                                               readonly
+                                               disabled
+                                               style="cursor: not-allowed; opacity: 0.6;">
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+
                             {% endif %}
-                        </div>
+
                         {% endfor %}
 
-                        <div class="d-grid gap-2">
+                        <div class="d-grid gap-2 mt-2">
                             <button type="button" 
                                     class="btn btn-primary btn-lg"
                                     id="updateParamsBtn"
@@ -335,7 +388,7 @@
                     <!-- Charts are dynamically created here based on incoming data keys -->
                     <div id="chartsContainer" class="row">
                         <p class="text-muted text-center mt-2" id="chartsPlaceholder">
-                            Waiting for data from the experiment...
+                            Waiting for data...
                         </p>
                     </div>
                 </div>
@@ -794,7 +847,7 @@ function createChart(key) {
     const color = CHART_COLORS[colorIndex % CHART_COLORS.length];
     colorIndex++;
 
-    // Format the key as a readable label (underscores → spaces, title case)
+    // Format the key as a readable label (underscores -> spaces, title case)
     const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
     const chart = new Chart(canvas, {

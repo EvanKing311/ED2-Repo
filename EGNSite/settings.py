@@ -28,7 +28,7 @@ LOGIN_REDIRECT_URL = '/dashboard/'
 SECRET_KEY = 'efiy#i9cg+dw!i+b+$6&t7v2r5rjc=@h31t2e&w#r)9z2c*gp0'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 APPEND_SLASH = True
 

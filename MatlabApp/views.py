@@ -95,15 +95,27 @@ EXPERIMENT_DEFAULTS = {
             'pendulum_damping': {'value': 0.005, 'editable': True, 'unit': ''},
         }
     },
-    #Other experiments for later
+    
     'CartControl': {
-        'parameters': {
+    'parameters': {
+        'PID_D': {
             'proportional': {'value': 27.8, 'editable': True, 'unit': 'kg'},
-            'integral': {'value': 50.0, 'editable': True, 'unit': 'kg/s'},
-            'derivative': {'value': 3.9, 'editable': True, 'unit': 'kg⋅s'}
-        }
+            'integral':     {'value': 50.0, 'editable': True, 'unit': 'kg/s'},
+            'derivative':   {'value': 3.9,  'editable': True, 'unit': 'kg⋅s'},
+        },
+        'PID_D1': {
+            'proportional': {'value': 27.8, 'editable': True, 'unit': 'kg'},
+            'integral':     {'value': 50.0, 'editable': True, 'unit': 'kg/s'},
+            'derivative':   {'value': 3.9,  'editable': True, 'unit': 'kg⋅s'},
+        },
+    }
+},
+    'TestCartPend1': {
+            'parameters': {
+
+            }
     },
-    'CartIdent': {},
+    #Other experiments for later
     'CraneIdent': {},
     'CraneStab': {},
     'InvPendIdent': {},
@@ -181,26 +193,51 @@ def send_experiment_command(request, experiment_name):
         # If START, attach parameters from request or fall back to saved/defaults
         if command == "sta":
             params_from_request = data.get('parameters', {})
+            
+            # Only build nested structure for experiments that use grouped PID params
+            nested_experiments = ['CartControl']
+            
             if params_from_request:
-                payload["parameters"] = params_from_request
+                if experiment_name in nested_experiments:
+                    nested = {}
+                    for key, value in params_from_request.items():
+                        parts = key.rsplit('_', 1)
+                        if len(parts) == 2:
+                            group, param = parts
+                            if group not in nested:
+                                nested[group] = {}
+                            nested[group][param] = value
+                        else:
+                            nested[key] = value
+                    payload["parameters"] = nested
+                else:
+                    # All other experiments — send flat as before
+                    payload["parameters"] = params_from_request
             else:
                 # Fall back to last saved session parameters
                 try:
                     session = ExperimentSession.objects.get(
                         experiment_name=experiment_name,
-                        #user=request.user
                     )
                     payload["parameters"] = session.parameters
                 except ExperimentSession.DoesNotExist:
                     # Fall back to defaults
-                    payload["parameters"] = {
-                        k: v["value"]
-                        for k, v in EXPERIMENT_DEFAULTS[experiment_name]["parameters"].items()
-                    }
+                    exp_params = EXPERIMENT_DEFAULTS[experiment_name].get('parameters', {})
+                    if experiment_name in nested_experiments:
+                        payload["parameters"] = {
+                            group: {
+                                param: config['value']
+                                for param, config in params.items()
+                            }
+                            for group, params in exp_params.items()
+                        }
+                    else:
+                        payload["parameters"] = {
+                            k: v["value"] for k, v in exp_params.items()
+                        }
 
         cmd_obj = Command.objects.create(
             command=command,
-            #user=request.user
         )
 
         success = send_command(payload)

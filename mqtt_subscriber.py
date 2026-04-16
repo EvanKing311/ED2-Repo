@@ -41,8 +41,12 @@ def on_connect(client, userdata, flags, rc):
 
 #when message received
 def on_message(client, userdata, msg):
+    from django.db import connection
+    
     message_text = msg.payload.decode()
     print(f"\n Received: '{message_text}' on topic '{msg.topic}'")
+
+    connection.close()  # forces Django to open a fresh connection
 
     try:
         #save to Message model (mySQL)
@@ -52,10 +56,8 @@ def on_message(client, userdata, msg):
     except Exception as e:
         print(f" Error saving to database: {e}")
 
-    # Push to WebSocket in real time
+    # Push to WebSocket 
     try:
-        # Try to parse as JSON for structured sensor data
-        # If it's a plain string, wrap it so the browser still receives it
         try:
             payload = json.loads(message_text)
         except json.JSONDecodeError:
@@ -70,7 +72,7 @@ def on_message(client, userdata, msg):
         )
         print(f" Pushed to WebSocket group 'sensor_data'")
     except Exception as e:
-        print(f" Error pushing to WebSocket: {e}")
+        print(f" Error pushing to WebSocket: {e}") 
 
 
 def main():
