@@ -910,6 +910,35 @@ function clearCharts() {
 }
 
 // ─────────────────────────────────────────────
+//  Message buffer — throttles chart redraws to
+//  10x per second regardless of incoming rate
+// ─────────────────────────────────────────────
+const messageBuffer = [];
+const CHART_UPDATE_INTERVAL = 100; // ms — redraw charts 10x per second
+
+setInterval(() => {
+    if (messageBuffer.length === 0) return;
+
+    const data = messageBuffer[messageBuffer.length - 1];
+    messageBuffer.length = 0;
+
+    try {
+        const t = data.time !== undefined ? data.time : new Date().toLocaleTimeString();
+
+        Object.entries(data).forEach(([key, value]) => {
+            if (key === 'time') return;
+            if (typeof value !== 'number') return;
+            if (!activeCharts[key]) {
+                createChart(key);
+            }
+            pushToChart(activeCharts[key], t, value);
+        });
+    } catch(err) {
+        console.error('Chart update error:', err);
+    }
+}, CHART_UPDATE_INTERVAL);
+
+// ─────────────────────────────────────────────
 //  WebSocket — receives sensor data from server
 // ─────────────────────────────────────────────
 let sensorSocket = null;
@@ -936,24 +965,22 @@ function initWebSocket() {
     };
 
     sensorSocket.onmessage = function(e) {
-        const data = JSON.parse(e.data);
+    const outer = JSON.parse(e.data);
+    let data = outer.data || outer;
 
-        // Skip plain string messages wrapped as {raw: ...}
-        if (data.raw !== undefined) return;
+    // If still wrapped as raw string, parse it
+    if (data.raw !== undefined) {
+        try {
+            // Fix unquoted keys and parse
+            const fixed = data.raw.replace(/(\{|,)\s*(\w+)\s*:/g, '$1"$2":');
+            data = JSON.parse(fixed);
+        } catch(err) {
+            return; // genuinely unparseable, skip
+        }
+    }
 
-        // Use 'time' field as x axis if present, otherwise use arrival timestamp
-        const t = data.time !== undefined ? data.time : new Date().toLocaleTimeString();
-
-        // Dynamically create a chart for every numeric key except 'time'
-        Object.entries(data).forEach(([key, value]) => {
-            if (key === 'time') return;
-            if (typeof value !== 'number') return;
-            if (!activeCharts[key]) {
-                createChart(key);
-            }
-            pushToChart(activeCharts[key], t, value);
-        });
-    };
+    messageBuffer.push(data);
+};
 }
 
 // ─────────────────────────────────────────────

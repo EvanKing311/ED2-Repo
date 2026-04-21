@@ -17,6 +17,7 @@ from MatlabApp.models import Message
 
 #Channel layer for WebSocket push
 import json
+import re
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
@@ -39,6 +40,23 @@ def on_connect(client, userdata, flags, rc):
         print(f"Connection failed with code {rc}")
 
 
+def parse_payload(message_text):
+    # First attempt — standard JSON
+    try:
+        return json.loads(message_text)
+    except json.JSONDecodeError:
+        pass
+
+    # Second attempt — fix unquoted keys by replacing word: with "word":
+    try:
+        fixed = re.sub(r'(\{|,)\s*(\w+)\s*:', r'\1"\2":', message_text)
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        pass
+
+    return {'raw': message_text}
+
+
 #when message received
 def on_message(client, userdata, msg):
     from django.db import connection
@@ -56,12 +74,9 @@ def on_message(client, userdata, msg):
     except Exception as e:
         print(f" Error saving to database: {e}")
 
-    # Push to WebSocket 
+    # Push to WebSocket
     try:
-        try:
-            payload = json.loads(message_text)
-        except json.JSONDecodeError:
-            payload = {'raw': message_text}
+        payload = parse_payload(message_text)
 
         async_to_sync(channel_layer.group_send)(
             'sensor_data',
@@ -72,7 +87,7 @@ def on_message(client, userdata, msg):
         )
         print(f" Pushed to WebSocket group 'sensor_data'")
     except Exception as e:
-        print(f" Error pushing to WebSocket: {e}") 
+        print(f" Error pushing to WebSocket: {e}")
 
 
 def main():
