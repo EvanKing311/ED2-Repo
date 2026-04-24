@@ -66,11 +66,20 @@ def on_message(client, userdata, msg):
 
     connection.close()  # forces Django to open a fresh connection
 
+    MAX_MESSAGES = 5000
+
     try:
-        #save to Message model (mySQL)
+        # Save to Message model (mySQL)
         Message.objects.create(message=message_text)
-        message_count = Message.objects.count()
-        print(f" Saved to Message table (total messages: {message_count})")
+
+        # Keep only the most recent MAX_MESSAGES readings
+        count = Message.objects.count()
+        if count > MAX_MESSAGES:
+            # Delete oldest entries beyond the cap
+            oldest_ids = Message.objects.order_by('timestamp').values_list('id', flat=True)[:count - MAX_MESSAGES]
+            Message.objects.filter(id__in=list(oldest_ids)).delete()
+
+        print(f" Saved to Message table (total messages: {min(count, MAX_MESSAGES)})")
     except Exception as e:
         print(f" Error saving to database: {e}")
 

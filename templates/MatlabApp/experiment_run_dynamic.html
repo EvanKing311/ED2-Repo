@@ -199,6 +199,7 @@
                 </button>
             </div>
 
+            <!-- Start/Stop Buttons -->
             <form method="POST" id="controlForm">
                 {% csrf_token %}
                 <div class="controls-bar">
@@ -265,7 +266,7 @@
                                 </div>
 
                             {% else %}
-                                <!-- NESTED group (e.g. PID_D, PID_D1) -->
+                                <!-- Nested param group for PID_D, PID_D1 -->
                                 <div class="param-group-header">{{ param_key }}</div>
 
                                 {% for sub_key, sub_config in param_config.items %}
@@ -303,6 +304,7 @@
 
                         {% endfor %}
 
+                        <!-- Parameter Buttons -->
                         <div class="d-grid gap-2 mt-2">
                             <button type="button" 
                                     class="btn btn-primary btn-lg"
@@ -330,7 +332,30 @@
 
     </div>
 
-    <!-- Status and Recent Activity -->
+    <!-- Live Charts — now above recent activity -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Live Data</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <span id="wsStatus" class="badge bg-secondary">Connecting...</span>
+                        <button class="btn btn-sm btn-outline-light" onclick="clearCharts()">Clear</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Charts dynamically created -->
+                    <div id="chartsContainer" class="row">
+                        <p class="text-muted text-center mt-2" id="chartsPlaceholder">
+                            Waiting for data...
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status and Recent Activity — now below graphs -->
     <div class="row mt-3">
         <div class="col-lg-6 mb-3">
             <div class="card shadow">
@@ -373,53 +398,24 @@
         </div>
     </div>
 
-    <!-- Live Charts -->
-    <div class="row mt-3">
-        <div class="col-12">
-            <div class="card shadow">
-                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Live Data</h5>
-                    <div class="d-flex align-items-center gap-2">
-                        <span id="wsStatus" class="badge bg-secondary">Connecting...</span>
-                        <button class="btn btn-sm btn-outline-light" onclick="clearCharts()">Clear</button>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <!-- Charts are dynamically created here based on incoming data keys -->
-                    <div id="chartsContainer" class="row">
-                        <p class="text-muted text-center mt-2" id="chartsPlaceholder">
-                            Waiting for data...
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<!--JS Charts-->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-// ─────────────────────────────────────────────
-//  State
-// ─────────────────────────────────────────────
+// User State and inactivity timer
 let experimentRunning = false;
 let iAmInControl = false;
 let heartbeatInterval = null;
 let pollInterval = null;
 let inactivityTimer = null;
-const INACTIVITY_TIMEOUT = 2 * 60 * 1000; // 2 minutes in milliseconds
+const INACTIVITY_TIMEOUT = 2 * 60 * 1000; //2 minutes
 
 // ─────────────────────────────────────────────
-//  Control lock — IDs of every element that
-//  should be disabled for view-only users.
-//  The read-only param inputs are already
-//  disabled in Django, so we only touch the
-//  interactive ones here.
-// ─────────────────────────────────────────────
+//Control elements to disable when user not in control
 const CONTROL_ELEMENTS = [
     'startBtn',
     'stopBtn',
@@ -427,14 +423,13 @@ const CONTROL_ELEMENTS = [
     'restoreDefaultsBtn',
 ];
 
-// Also disable every editable param-input
+//Also disable every editable param-input (not just read only)
 function getEditableParamInputs() {
     return document.querySelectorAll('.param-input:not([readonly]):not([disabled])');
 }
 
-// ─────────────────────────────────────────────
-//  Control lock — acquire / release / heartbeat
-// ─────────────────────────────────────────────
+//Control lock — acquire / release / heartbeat
+//Heartbeat to see if user is active, acquire lock when first in queue, release lock on inactivity or tab close
 function getCsrfToken() {
     return document.querySelector('[name=csrfmiddlewaretoken]').value;
 }
@@ -451,10 +446,10 @@ async function acquireLock() {
             setControlMode(true);
             startHeartbeat();
         } else if (data.status === 'viewer') {
-            // Permanently view only
+            //Permanently view only (demo user)
             setViewerMode()  
         } else {
-            // Lock is held by someone else
+            //Lock held by someone else
             setControlMode(false);
             startPolling();
         }
@@ -497,7 +492,7 @@ async function releaseLock() {
 }
 
 function startHeartbeat() {
-    // Clear any existing poll — we now have control
+    //clear any existing poll
     if (pollInterval) {
         clearInterval(pollInterval);
         pollInterval = null;
@@ -512,7 +507,7 @@ function startHeartbeat() {
             const data = await res.json();
 
             if (data.status === 'lost') {
-                // Server no longer recognises our lock (e.g. admin cleared it)
+                //Server no longer recognises our lock (admin clear)
                 clearInterval(heartbeatInterval);
                 heartbeatInterval = null;
                 setControlMode(false);
@@ -521,11 +516,11 @@ function startHeartbeat() {
         } catch (err) {
             console.error('Heartbeat error:', err);
         }
-    }, 15000); // every 15 seconds
+    }, 15000); //every 15 seconds
 }
 
 function startPolling() {
-    // Clear any existing heartbeat — we don't have control
+    // Clear any existing heartbeat - no user control
     if (heartbeatInterval) {
         clearInterval(heartbeatInterval);
         heartbeatInterval = null;
@@ -537,7 +532,7 @@ function startPolling() {
             const data = await res.json();
 
             if (!data.locked) {
-                // Lock is free — stop polling and try to grab it
+                //Lock is free, stop polling and try to grab it
                 clearInterval(pollInterval);
                 pollInterval = null;
                 acquireLock();
@@ -545,12 +540,10 @@ function startPolling() {
         } catch (err) {
             console.error('Poll error:', err);
         }
-    }, 5000); // every 5 seconds
+    }, 5000); //every 5 seconds
 }
 
-// ─────────────────────────────────────────────
-//  Inactivity timer
-// ─────────────────────────────────────────────
+//  Inactivity timer resets on any control interaction, releases lock if time runs out
 function resetInactivityTimer() {
     if (!iAmInControl) return;
 
@@ -559,12 +552,12 @@ function resetInactivityTimer() {
     }
 
     inactivityTimer = setTimeout(() => {
-        // Time's up — release control
+        //Timer up, release lock and switch to view only
         releaseLock();
         setControlMode(false);
         startPolling();
 
-        // Hide the regular banner, show the inactivity one
+        // Hide regular banner, show inactivity banner
         document.getElementById('controlStatusBanner').style.display = 'none';
         document.getElementById('inactivityBanner').style.display = 'flex';
     }, INACTIVITY_TIMEOUT);
@@ -575,9 +568,7 @@ async function requestControl() {
     await acquireLock();
 }
 
-// ─────────────────────────────────────────────
 //  Control lock — UI mode switching
-// ─────────────────────────────────────────────
 function setControlMode(inControl) {
     iAmInControl = inControl;
 
@@ -596,9 +587,9 @@ function setControlMode(inControl) {
     if (inControl) {
         banner.style.display = 'none';
         document.getElementById('inactivityBanner').style.display = 'none';
-        resetInactivityTimer(); // start countdown when control gained
+        resetInactivityTimer(); //start countdown when control gained
     } else {
-        // Clear inactivity timer when control is lost
+        //Clear inactivity timer when control is lost
         if (inactivityTimer) {
             clearTimeout(inactivityTimer);
             inactivityTimer = null;
@@ -923,8 +914,8 @@ setInterval(() => {
     messageBuffer.length = 0;
 
     try {
-        const t = data.time !== undefined ? data.time : new Date().toLocaleTimeString();
-
+        const t = data.time !== undefined ? parseFloat(data.time.toFixed(2)) : new Date().toLocaleTimeString();
+        
         Object.entries(data).forEach(([key, value]) => {
             if (key === 'time') return;
             if (typeof value !== 'number') return;
@@ -965,22 +956,22 @@ function initWebSocket() {
     };
 
     sensorSocket.onmessage = function(e) {
-    const outer = JSON.parse(e.data);
-    let data = outer.data || outer;
+        const outer = JSON.parse(e.data);
+        let data = outer.data || outer;
 
-    // If still wrapped as raw string, parse it
-    if (data.raw !== undefined) {
-        try {
-            // Fix unquoted keys and parse
-            const fixed = data.raw.replace(/(\{|,)\s*(\w+)\s*:/g, '$1"$2":');
-            data = JSON.parse(fixed);
-        } catch(err) {
-            return; // genuinely unparseable, skip
+        // If still wrapped as raw string, parse it
+        if (data.raw !== undefined) {
+            try {
+                // Fix unquoted keys and parse
+                const fixed = data.raw.replace(/(\{|,)\s*(\w+)\s*:/g, '$1"$2":');
+                data = JSON.parse(fixed);
+            } catch(err) {
+                return; // genuinely unparseable, skip
+            }
         }
-    }
 
-    messageBuffer.push(data);
-};
+        messageBuffer.push(data);
+    };
 }
 
 // ─────────────────────────────────────────────

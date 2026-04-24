@@ -15,7 +15,7 @@ def send_command(payload):
             "command": payload
         }
 
-    # Attach user info
+    # Attach user info (COMMENTED OUT, NO USER AUTH ON PI SIDE)
     #payload["user_id"] = user.id
     #payload["username"] = user.username
 

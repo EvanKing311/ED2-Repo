@@ -84,51 +84,160 @@ def requires_control_lock(view_func):
 # Experiment configuration - default parameters for each experiment
 EXPERIMENT_DEFAULTS = {
     'SwingHoldPendulum': {
-        'parameters': {
-            'pendulum_mass': {'value': 0.2, 'editable': False, 'unit': 'kg'},
-            'cart_mass': {'value': 2.3, 'editable': False, 'unit': 'kg'},
-            'pendulum_length': {'value': 0.3, 'editable': False, 'unit': 'm'},
-            'gravity': {'value': 9.81, 'editable': False, 'unit': 'm/s²'},
-            'moment_inertia': {'value': 0.0099, 'editable': True, 'unit': 'kg⋅m²'},
-            'initial_angle': {'value': 'pi', 'editable': True, 'unit': 'radians'},
-            'cart_friction': {'value': 0.00005, 'editable': True, 'unit': ''},
-            'pendulum_damping': {'value': 0.005, 'editable': True, 'unit': ''},
-        }
+            'parameters': {
+                'pendulum_mass': {'value': 0.2, 'editable': False, 'unit': 'kg'},
+                'cart_mass': {'value': 2.3, 'editable': False, 'unit': 'kg'},
+                'pendulum_length': {'value': 0.3, 'editable': False, 'unit': 'm'},
+                'gravity': {'value': 9.81, 'editable': False, 'unit': 'm/s²'},
+                'moment_inertia': {'value': 0.0099, 'editable': True, 'unit': 'kg⋅m²'},
+                'initial_angle': {'value': 'pi', 'editable': True, 'unit': 'radians'},
+                'cart_friction': {'value': 0.00005, 'editable': True, 'unit': ''},
+                'pendulum_damping': {'value': 0.005, 'editable': True, 'unit': ''},
+            }
     },
     
     'CartControl': {
-    'parameters': {
-        'PID_D': {
-            'proportional': {'value': 27.8, 'editable': True, 'unit': 'kg'},
-            'integral':     {'value': 50.0, 'editable': True, 'unit': 'kg/s'},
-            'derivative':   {'value': 3.9,  'editable': True, 'unit': 'kg⋅s'},
-        },
-        'PID_D1': {
-            'proportional': {'value': 27.8, 'editable': True, 'unit': 'kg'},
-            'integral':     {'value': 50.0, 'editable': True, 'unit': 'kg/s'},
-            'derivative':   {'value': 3.9,  'editable': True, 'unit': 'kg⋅s'},
-        },
-    }
-},
+            'parameters': {
+                'PID_D': {
+                    'proportional': {'value': 27.8, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 50.0, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 3.9,  'editable': True, 'unit': 'kg⋅s'},
+                },
+                'PID_D1': {
+                    'proportional': {'value': 27.8, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 50.0, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 3.9,  'editable': True, 'unit': 'kg⋅s'},
+                },
+            }
+    },
+
     'TestCartPend1': {
             'parameters': {
+                'kp': {'value': 27.8,'editable': True, 'unit': 'unit'},
+                'ki': {'value': 50.0, 'editable': True, 'unit': 'unit'},
+                'kd': {'value': 3.9,  'editable': True, 'unit': 'unit'},
+            }
+    },
+
+    'CraneIdent': {
+            'parameters': {
+
+        }
+    },
+
+    'CraneStab': {
+            'parameters': {
+                'PID_D' :{
+                    'proportional': {'value': 8.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.3, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 4.0,  'editable': True, 'unit': 'kg⋅s'},
+                },
+                'PID_D1' :{
+                    'proportional': {'value': 5.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.1, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 0.2,  'editable': True, 'unit': 'kg⋅s'},
+                }
+        },
+    },
+
+    'InvPendIdent': {
+            'parameters': {
+                'PID' : {
+                    'proportional': {'value': 20.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.1, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 2.0,  'editable': True, 'unit': 'kg⋅s'},  
+                },
+                'PID_D' : {
+                    'proportional': {'value': 7.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.1, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 2.0,  'editable': True, 'unit': 'kg⋅s'},  
+                },
+                'PID_1' : {
+                    'proportional': {'value': 7.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.1, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 2.0,  'editable': True, 'unit': 'kg⋅s'},  
+                },
+                'PID_D1' : {
+                    'proportional': {'value': 20.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.1, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 2.0,  'editable': True, 'unit': 'kg⋅s'},  
+                },
+            }
+    },
+
+    'PendstabPD': {
+            'parameters': {
+                'PID_1' : {
+                    'proportional': {'value': 8.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.3, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 4.0,  'editable': True, 'unit': 'kg⋅s'},  
+                },
+                'PID_D1' : {
+                    'proportional': {'value': 25.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.1, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 1.8,  'editable': True, 'unit': 'kg⋅s'},  
+                },
+            }
+    },
+
+    'PendSwingUp': {
+            'parameters': {
+                'voltage amplitude': {'value': 0.2, 'editable': True, 'unit': 'V'},
+                'angle comparison value': {'value': 1.0, 'editable': True, 'unit': 'rad'}
+            }
+    },
+    'PendulumFriction': {
+            'parameters': {
+            }
+    },
+
+    'SwingHoldPendulumExtra': {
+            'parameters': {
+                'PID_D' :{
+                    'proportional': {'value': 7.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.5, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 4.0,  'editable': True, 'unit': 'kg⋅s'},
+                },
+                'PID_D1' :{
+                    'proportional': {'value': 25.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.2, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 1.5,  'editable': True, 'unit': 'kg⋅s'},
+                },
+        }
+    },
+
+    'UpDownPendulum': {
+            'parameters': {
+                'PID_DIPS' :{
+                    'proportional': {'value': 7.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.5, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 3.0,  'editable': True, 'unit': 'kg⋅s'},
+                },
+                'PID_D1IPS' :{
+                    'proportional': {'value': 25.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.2, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 2.0,  'editable': True, 'unit': 'kg⋅s'},
+                },
+                'PID_DCC' :{
+                    'proportional': {'value': 7.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 2.0, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 1.0,  'editable': True, 'unit': 'kg⋅s'},
+                },
+                'PID_D1CC' :{
+                    'proportional': {'value': 4.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.0, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 0.1,  'editable': True, 'unit': 'kg⋅s'},
+                },
 
             }
     },
-    #Other experiments for later
-    'CraneIdent': {},
-    'CraneStab': {},
-    'InvPendIdent': {},
-    'PendstabPD': {},
-    'PendSwingUp': {},
-    'PendulumFriction': {},
-    'SwingHoldPendulumExtra': {},
-    'UpDownPendulum': {},
     'PendulumTest': {},
     'InvPendulumStream': {
         'parameters': {}
     },
+    
 }
+
 
 
 @login_required
