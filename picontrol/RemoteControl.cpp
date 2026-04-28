@@ -1,3 +1,7 @@
+//******************************************************************************************************************************************************************************************/
+// Remote control of pendulum experiment via MQTT messages, with status light feedback and Simulink program dispatching */
+//******************************************************************************************************************************************************************************************/
+
 #include <iostream>
 #include <cstring>
 #include <mosquitto.h>
@@ -16,11 +20,12 @@ json json_data;
 json pgm_dispatch = json::parse(R"(
 {
 	"CartControl" : "CartControlPiMod2.elf",
+	"TestCartPend1" : "TestCartPend1PiMod2.elf",
 	"CartIdent" : "CartIdentPiMod2.elf",
 	"CraneIdent" : "CraneIdentPiMod2.elf",
 	"CraneStab" : "CraneStabPiMod2.elf",
 	"InvPendIdent" : "InvPendIdentPiMod2.elf",
-	"PendStabPD" : "PendStabPDPiMod2.elf",
+	"PendstabPD" : "PendStabPDPiMod2.elf",
 	"PendSwingUp" : "PendSwingUpPiMod2.elf",
 	"PendulumFriction" : "PendulumFrictionPiMod2.elf",
 	"PendulumTest" : "PendulumTestPiMod2.elf",
@@ -33,136 +38,167 @@ json pgm_dispatch = json::parse(R"(
 std::string expState = "initialized";
 std::string sim_pgm = "";
 
-const char *chipname = "gpiochip0";
-const char *linenameStart = "GPIO23";
-const char *linenameStop = "GPIO24";
-const char *linenameRecenter = "GPIO25";
-const char *linenameReset = "GPIO6";
-struct gpiod_chip *chip;
-struct gpiod_line *lineStart;
-struct gpiod_line *lineStop;
-struct gpiod_line *lineRecenter;
-struct gpiod_line *lineReset;
-//######################################################################################################################################################################################
-// Dispatch to simulink program
-//######################################################################################################################################################################################
+//******************************************************************************************************************************************************************************************/
+//* Simulink Functions */
+//******************************************************************************************************************************************************************************************/
+//* Setup Simulink */
+void setupSimulink() {
+	std::cout << "Simulink Setup - Started" << std::endl;
+	std::cout << "               - Complete" << std::endl;
+	return;
+} 
+
+static void process_parameters(std::string exp,json parameters) {
+	
+	json parm_dispatch = json::parse(R"(
+	{
+		"CartControl" : 
+			{
+				"PID_D1_derivative":"PID1DD",
+				"PID_D1_integral" : "PID1DI",
+				"PID_D1_proportional" : "PID1DP",
+				"PID_D_derivative" : "PIDDD",
+				"PID_D_integral" : "PIDDI",
+				"PID_D_proportional" : "PIDDP"
+			},
+		"TestCartPend1" :
+			{
+				"kd" : "kd",
+				"ki" : "ki",
+				"kp" : "kp"
+			},
+		"CartIdent" :
+			{
+			},
+		"CraneStab" :
+			{
+				"PID_D1_derivative":"PID1DD",
+				"PID_D1_integral" : "PID1DI",
+				"PID_D1_proportional" : "PID1DP",
+				"PID_D_derivative" : "PIDDD",
+				"PID_D_integral" : "PIDDI",
+				"PID_D_proportional" : "PIDDP"
+			},
+		"InvPendIdent" :
+			{
+				"PID_1_derivative":"PID1D",
+				"PID_1_integral" : "PID1I",
+				"PID_1_proportional" : "PID1P",
+				"PID_D1_derivative" : "PID1DD",
+				"PID_D1_integral" : "PID1DI",
+				"PID_D1_proportional" : "PID1DP",
+				"PID_D_derivative" : "PIDDD",
+				"PID_D_integral"  : "PIDDI",
+				"PID_D_proportional" : "PIDDP",
+				"PID_derivative" : "PIDD",
+				"PID_integral" : "PIDI",
+				"PID_proportional" : "PIDP"
+			},
+		"PendstabPD" :
+			{
+				"PID_1_derivative":"PID1D",
+				"PID_1_integral" : "PID1I",
+				"PID_1_proportional" : "PID1P",
+				"PID_D1_derivative" : "PID1DD",
+				"PID_D1_integral" : "PID1DI",
+				"PID_D1_proportional" : "PID1DP"
+			},
+		"PendSwingUp" : 
+			{
+				"angle comparison value":"ACV",
+				"voltage amplitude" : "VA"
+			},
+		"PendulumFriction" : 
+			{
+			},
+		"PendulumTest" :
+			{
+			},
+		"SwingHoldPendulum" : 
+			{
+				"cart_friction":"CF",
+				"initial_angle" : "IA",
+				"moment_inertia" : "MI",
+				"pendulum_damping" : "PD"
+			},
+		"SwingHoldPendulumExtra" : 
+			{
+				"PID_D1_derivative" : "PID1DD",
+				"PID_D1_integral" : "PID1DI",
+				"PID_D1_proportional" : "PID1DP",
+				"PID_D_derivative" : "PIDDD",
+				"PID_D_integral"  : "PIDDI",
+				"PID_D_proportional" : "PIDDP"
+			},
+		"UpDownPendulum" :
+			{
+				"PID_DIPS_derivative" : "IPSPIDDD",
+				"PID_DIPS_integral" : "IPSPIDDI",
+				"PID_DIPS_proportional" : "IPSPID1DP",
+				"PID_D1IPS_derivative" : "IPSPID1DD",
+				"PID_D1IPS_integral" : "IPSPID1DI",
+				"PID_D1IPS_proportional" : "IPSPID1DP",
+				"PID_DCC_derivative" : "CCPIDDD",
+				"PID_DCC_integral" : "CCPIDDI",
+				"PID_DCC_proportional" : "CCPIDDP",
+				"PID_D1CC_derivative" : "CCPID1DD",
+				"PID_D1CC_integral" : "CCPID1DI",
+				"PID_D1CC_proportional" : "CCPID1DP"
+			}
+		
+		}
+	)");	                                 
+	std::cout << "Processing experiment " << exp << std::endl;                                 
+	std::cout << "Processing parameters " << parameters.dump() << std::endl;
+	
+	json expParms = parm_dispatch[exp];
+	
+	json data = json::parse(parameters.dump());
+	for (const auto& [key, value] : data.items()) {
+		std::string fullKey = key;
+		std::string modelKey = expParms[key];
+		// Print primitive values (string, int, bool, null)
+		std::cout << fullKey << " = " << value << "-->" << modelKey << "\n";
+
+	}
+	
+	return;
+}
 
 static void dispatch_to_simulink(std::string exp, json parameters) {
-	const std::string library = "/home/owlsley/MATLAB_ws/R2025b";
+	const std::string library = "/home/owlsley/picontrol/MATLAB_ws/R2025b";
 	sim_pgm = pgm_dispatch[exp];
 	
-	std::cout << "Dispatching to program " << sim_pgm << " with parameters: " << parameters.dump() << std::endl;
-	// Here you would add the actual code to send the command and parameters to the Simulink program, e.g., via a socket or shared memory.
-		
+	std::cout << "Dispatching to program " << sim_pgm << std::endl;
+			
+	process_parameters(exp, parameters);
+	return;
+	
 	std::cout << "Started Simulink program " << sim_pgm << std::endl;
-	int retval = system(("sudo "+library + "/" + sim_pgm + " &").c_str());
+	int retval = system(("sudo " + library + "/" + sim_pgm + " &").c_str());
 	if (retval == -1) {
 		std::cerr << "Failed to execute Simulink program." << std::endl;
 	}
 }
 
-
 static void kill_simulink() {
 	std::cout << "Killing Simulink program " << sim_pgm << std::endl;
-	int retval = system(("ps -ef | grep "+sim_pgm + " | awk '{print $2}' | xargs kill &").c_str());
+	int retval = system(("ps -ef | grep " + sim_pgm + " | awk '{print $2}' | xargs kill &").c_str());
 	if (retval == -1) {
 		std::cerr << "Failed to kill Simulink program." << std::endl;
 	}
 }
-//######################################################################################################################################################################################
-// Setup parameter file
-//######################################################################################################################################################################################
+//******************************************************************************************************************************************************************************************/
+//* MQTT Functions */
+//******************************************************************************************************************************************************************************************/
+const char *host = "sciencelabtoyou.com"; // Change to your broker address
+int port = 1885;
+const char *client_id = "cpp_subscriber";
+struct mosquitto *mosq;
 
-//######################################################################################################################################################################################
-// Message actions
-//######################################################################################################################################################################################
-
-static void push_start_button() {
-
-};
-
-
-static void push_stop_button() {
-	
-}
-
-static void push_recenter_button() {
-
-}
-//########################################################################################################################################################################################
-// Status Light actions
-//########################################################################################################################################################################################
-
-
-void status_light(std::string cmd)
-{
-	
-	chip = gpiod_chip_open_by_name(chipname);
-	if (!chip) {
-		perror("Open chip failed\n");
-		return;
-	}
-	
-	lineStart = gpiod_chip_find_line(chip, linenameStart);
-	if (!lineStart) {
-		perror("Find lineStart failed\n");
-		gpiod_chip_close(chip);
-		return;
-	}
-	lineStop = gpiod_chip_find_line(chip, linenameStop);
-	if(!lineStop) {
-		perror("Find lineStop failed\n");
-		gpiod_chip_close(chip);
-		return;
-	}
-	lineRecenter = gpiod_chip_find_line(chip, linenameRecenter);
-	if (!lineRecenter) {
-		perror("Find lineRecenter failed\n");
-		gpiod_chip_close(chip);
-		return;
-	}
-	
-	if (gpiod_line_request_output(lineStart, "gpio_test", 0) < 0) {
-		perror("Request lineStart as output failed\n");
-		gpiod_chip_close(chip);
-		return;
-	}
-	if (gpiod_line_request_output(lineStop, "gpio_test", 0) < 0) {
-		perror("Request lineStop as output failed\n");
-		gpiod_chip_close(chip);
-		return;
-	}
-	if (gpiod_line_request_output(lineRecenter, "gpio_test", 0) < 0) {
-		perror("Request lineRecenter as output failed\n");
-		gpiod_chip_close(chip);
-		return;	
-	}
-	
-	if (cmd == "sta") {
-		expState = "running";
-		gpiod_line_set_value(lineStart, 1);		// On
-		gpiod_line_set_value(lineStop, 0);		// Off
-		gpiod_line_set_value(lineRecenter, 0);	// Off
-	} else if (cmd == "sto") {
-		expState = "stopped";
-		gpiod_line_set_value(lineStart, 0);		// Off
-		gpiod_line_set_value(lineStop, 1);		// On
-		gpiod_line_set_value(lineRecenter, 0);	// Off
-	} else if (cmd == "rec") {
-		expState = "recentered";
-		gpiod_line_set_value(lineStart, 0);		// Off
-		gpiod_line_set_value(lineStop, 0);		// Off
-		gpiod_line_set_value(lineRecenter, 1);	// On
-	} else {
-			printf("Unknown lights command: %s\n", cmd);
-	}
-	
-	gpiod_line_release(lineStart);
-	gpiod_chip_close(chip);
-}
-//########################################################################################################################################################################################
+//*************************/
 // MQTT message processing
-//########################################################################################################################################################################################
+//*************************/
 void process_message(std::string payload) {
 
 	json_data = json::parse(payload);
@@ -172,34 +208,20 @@ void process_message(std::string payload) {
 	
 	auto experiment = json_data.find("experiment");
 	std::cout << "Experiment: " << *experiment << std::endl;	
-	
-
-	
+		
 	if (*command == "sta") {
 		auto parameters = json_data.find("parameters");
 		std::cout << "Parameters: " << *parameters << std::endl;
-		
-		status_light(*command);
 		dispatch_to_simulink(*experiment, *parameters);
-		push_start_button();
 	}
 	else if (*command == "sto") {
-		status_light(*command);
 		kill_simulink();
-		push_stop_button();
-	}
-	else if (*command == "rec") {
-		status_light(*command);
-		push_recenter_button();
 	}
 	else {
 		printf("Unknown command: %s\n", payload);
 	}
 }
 
-//##################
-// MQTT actions    #
-//##################
 // Callback when the client connects to the broker
 void on_connect(struct mosquitto *mosq, void *userdata, int rc) {
 	if (rc == 0) {
@@ -232,84 +254,16 @@ void on_message(struct mosquitto *mosq, void *userdata, const struct mosquitto_m
 void on_disconnect(struct mosquitto *mosq, void *userdata, int rc) {
 	std::cout << "Disconnected from broker." << std::endl;
 }
-//########################################################################################################################################################################################
-// ADC actions
-//########################################################################################################################################################################################
-//########################################################################################################################################################################################
-// GPIO actions
-//########################################################################################################################################################################################
-void setup_gpio() {
-	// Here you would add code to initialize the GPIO pins, e.g., using gpiod to set up the lines for the status lights and buttons.
-	chip = gpiod_chip_open_by_name(chipname);
-	if (!chip) {
-		perror("Open chip failed\n");
-		return;
-	}
-	
-	lineStart = gpiod_chip_find_line(chip, linenameStart);
-	if (!lineStart) {
-		perror("Find lineStart failed\n");
-		gpiod_chip_close(chip);
-		return;
-	}
-	lineStop = gpiod_chip_find_line(chip, linenameStop);
-	if (!lineStop) {
-		perror("Find lineStop failed\n");
-		gpiod_chip_close(chip);
-		return;
-	}
-	lineRecenter = gpiod_chip_find_line(chip, linenameRecenter);
-	if (!lineRecenter) {
-		perror("Find lineRecenter failed\n");
-		gpiod_chip_close(chip);
-		return;
-	}
-	lineReset = gpiod_chip_find_line(chip, linenameReset);
-	if (!lineReset) {
-		perror("Find lineReset failed\n");
-		gpiod_chip_close(chip);
-		return;
-	}	
-	
-	if (gpiod_line_request_output(lineStart, "gpio_test", 0) < 0) {
-		perror("Request lineStart as output failed\n");
-		gpiod_chip_close(chip);
-		return;
-	}
-	if (gpiod_line_request_output(lineStop, "gpio_test", 0) < 0) {
-		perror("Request lineStop as output failed\n");
-		gpiod_chip_close(chip);
-		return;
-	}
-	if (gpiod_line_request_output(lineRecenter, "gpio_test", 0) < 0) {
-		perror("Request lineRecenter as output failed\n");
-		gpiod_chip_close(chip);
-		return;	
-	}
-	if (gpiod_line_request_output(lineReset, "gpio_test", 0) < 0) {
-		perror("Request lineReset as output failed\n");
-		gpiod_chip_close(chip);
-		return;	
-	}
-	
-	gpiod_line_set_value(lineStart, 0);		// Off
-	gpiod_line_set_value(lineStop, 0);		// Off
-	gpiod_line_set_value(lineRecenter, 0);	// Off
-	gpiod_line_set_value(lineReset, 0);		// Off}
-}
-//########################################################################################################################################################################################
-// main function
-//########################################################################################################################################################################################
-int main() {
-	const char *host = "sciencelabtoyou.com"; // Change to your broker address
-	int port = 1885;
-	const char *client_id = "cpp_subscriber";
+
+//* Setup MQTT */
+int setupMQTT() {
+	std::cout << "MQTT Setup - Started" << std::endl;
 
 	// Initialize the Mosquitto library
 	mosquitto_lib_init();
 
 	// Create a new Mosquitto client instance
-	struct mosquitto *mosq = mosquitto_new(client_id, true, nullptr);
+	mosq = mosquitto_new(client_id, true, nullptr);
 	if (!mosq) {
 		std::cerr << "Failed to create Mosquitto instance." << std::endl;
 		mosquitto_lib_cleanup();
@@ -329,42 +283,27 @@ int main() {
 		mosquitto_lib_cleanup();
 		return 1;
 	}
-
-	// Start the network loop (blocking)
-	mosquitto_loop_forever(mosq, -1, 1);
-
-	// Cleanup
-	std::cout << "Clean-up" << std::endl;
-	mosquitto_destroy(mosq);
-	mosquitto_lib_cleanup();
-
+	
+	std::cout << "           - Complete" << std::endl;
 	return 0;
 }
-//******************************************************************************************************************************************************************************************/
-// Remote control of pendulum experiment via MQTT messages, with status light feedback and Simulink program dispatching */
-//******************************************************************************************************************************************************************************************/
 
-
-//******************************************************************************************************************************************************************************************/
-//* Simulink Functions */
-//******************************************************************************************************************************************************************************************/
-//* Setup Simulink */
-void setupSimulink() {
-	return;
-} 
-
-//******************************************************************************************************************************************************************************************/
-//* MQTT Functions */
-//******************************************************************************************************************************************************************************************/
-//* Setup MQTT */
-void setupMQTT() {
-	return;
+//* Cleanup MQTT */
+int cleanupMQTT() {
+	
+	std::cout << "MQTT Cleanup - Started" << std::endl;
+	mosquitto_destroy(mosq);
+	mosquitto_lib_cleanup();
+	std::cout << "             - Complete" << std::endl;
+	return 0;
 }
 //******************************************************************************************************************************************************************************************/
 //* ADC Functions */
 //******************************************************************************************************************************************************************************************/
-//* Setup ADC */
+//* Setup DAC */
 void setupADC() {
+	std::cout << "DAC Setup - Started" << std::endl;
+	std::cout << "          - Complete" << std::endl;
 	return;
 }
 
@@ -373,14 +312,76 @@ void setupADC() {
 //******************************************************************************************************************************************************************************************/
 //* Setup I2C */
 void setupI2C() {
+	std::cout << "I2C Setup - Started" << std::endl;
+	std::cout << "          - Complete" << std::endl;
 	return;
 }
 
 //******************************************************************************************************************************************************************************************/
 //* GPIO Functions */
 //******************************************************************************************************************************************************************************************/
+const char *chipname = "gpiochip0";
+struct gpiod_chip *chip;
+const char *gpioHomeStartName = "GPIO16";
+struct gpiod_line *gpioHomeStart;
+const char *gpioStopName = "GPIO20";
+struct gpiod_line *gpioStop;
+const char *gpioHomeDoneName = "GPIO13";
+struct gpiod_line *gpioHomeDone;
+
 //* Setup GPIO */
 void setupGPIO() {
+	std::cout << "GPIO Setup - Started" << std::endl;
+
+	chip = gpiod_chip_open_by_name(chipname);
+	if (!chip) {
+		perror("Open chip failed\n");
+		return;
+	}
+	
+	//* Setup GPIO Home Start line */
+	gpioHomeStart = gpiod_chip_find_line(chip, gpioHomeStartName);
+	if (!gpioHomeStart) {
+		perror("GPIO Home Start failed\n");
+		gpiod_chip_close(chip);
+		return;
+	}
+	if (gpiod_line_request_output(gpioHomeStart, "gpio_test", 0) < 0) {
+		perror("GPIO Home Start as output failed\n");
+		gpiod_chip_close(chip);
+		return;
+	}
+	gpiod_line_set_value(gpioHomeStart, 0);		// Off
+	
+	//* Setup GPIO Stop line */
+	gpioStop = gpiod_chip_find_line(chip, gpioStopName);
+	if (!gpioStop) {
+		perror("GPIO Stop failed\n");
+		gpiod_chip_close(chip);
+		return;
+	}
+	if (gpiod_line_request_output(gpioStop, "gpio_test", 0) < 0) {
+		perror("GPIO Stop as output failed\n");
+		gpiod_chip_close(chip);
+		return;
+	}
+	gpiod_line_set_value(gpioStop, 0);		// Off
+		
+	//* Setup GPIO Home Done line */
+	gpioHomeDone = gpiod_chip_find_line(chip, gpioHomeDoneName);
+	if (!gpioHomeDone) {
+		perror("GPIO Home Done failed\n");
+		gpiod_chip_close(chip);
+		return;
+	}
+	if (gpiod_line_request_input(gpioHomeDone, "gpio_test") < 0) {
+		perror("GPIO Home Done as input failed\n");
+		gpiod_chip_close(chip);
+		return;
+	}
+	gpiod_line_set_value(gpioHomeDone, 0);		// Off
+	
+	std::cout << "           - Complete" << std::endl;
 	return;
 }
 //******************************************************************************************************************************************************************************************/
@@ -396,8 +397,10 @@ int main() {
 	
 	while (true) {
 		// Main loop can be used for other tasks if needed
-		sleep(1);
+		mosquitto_loop_forever(mosq, -1, 1);		
 	}
+	
+	cleanupMQTT();
 	
 	return 0;
 }
