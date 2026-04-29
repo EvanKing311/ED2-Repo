@@ -39,3 +39,12 @@ def logout_view(request):
     
     logout(request)
     return redirect('login')
+
+def demo_login(request):
+    from accounts.models import CustomUser
+    try:
+        demo_user = CustomUser.objects.get(username='showcase', is_viewer=True)
+        login(request, demo_user, backend='django.contrib.auth.backends.ModelBackend')
+        return redirect('experiment_run_dynamic', experiment_name='CartControl')
+    except CustomUser.DoesNotExist:
+        return redirect('login')

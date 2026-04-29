@@ -85,14 +85,16 @@ def requires_control_lock(view_func):
 EXPERIMENT_DEFAULTS = {
     'SwingHoldPendulum': {
             'parameters': {
-                'pendulum_mass': {'value': 0.2, 'editable': False, 'unit': 'kg'},
-                'cart_mass': {'value': 2.3, 'editable': False, 'unit': 'kg'},
-                'pendulum_length': {'value': 0.3, 'editable': False, 'unit': 'm'},
-                'gravity': {'value': 9.81, 'editable': False, 'unit': 'm/s²'},
-                'moment_inertia': {'value': 0.0099, 'editable': True, 'unit': 'kg⋅m²'},
-                'initial_angle': {'value': 'pi', 'editable': True, 'unit': 'radians'},
-                'cart_friction': {'value': 0.00005, 'editable': True, 'unit': ''},
-                'pendulum_damping': {'value': 0.005, 'editable': True, 'unit': ''},
+                'PID_D': {
+                    'proportional': {'value': 70, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.5, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 4.0,  'editable': True, 'unit': 'kg⋅s'},
+                },
+                'PID_D1': {
+                    'proportional': {'value': 25.0, 'editable': True, 'unit': 'kg'},
+                    'integral':     {'value': 0.2, 'editable': True, 'unit': 'kg/s'},
+                    'derivative':   {'value': 1.5,  'editable': True, 'unit': 'kg⋅s'},
+                },
             }
     },
     
@@ -165,7 +167,7 @@ EXPERIMENT_DEFAULTS = {
             }
     },
 
-    'PendstabPD': {
+    'PendStabPD': {
             'parameters': {
                 'PID_1' : {
                     'proportional': {'value': 8.0, 'editable': True, 'unit': 'kg'},
@@ -304,7 +306,7 @@ def send_experiment_command(request, experiment_name):
             params_from_request = data.get('parameters', {})
             
             # Only build nested structure for experiments that use grouped PID params
-            nested_experiments = ['CartControl']
+            nested_experiments = []
             
             if params_from_request:
                 if experiment_name in nested_experiments:

@@ -28,4 +28,7 @@ urlpatterns = [
     path('control/release/', views.release_lock, name='release_lock'),
     path('control/heartbeat/', views.heartbeat, name='heartbeat'),
     path('control/status/', views.lock_status, name='lock_status'),
+
+    #demo login
+    path('demo/', accounts_views.demo_login, name='demo_login'),
 ]
