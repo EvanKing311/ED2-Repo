@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+sourcedir="/home/owlsley/picontrol/MATLAB_ws/R2025b/C/ProgramData/Feedback_Instruments/33-936_Pendulum/Examples"
+destdir="/home/owlsley/picontrol/models/MATLAB_ws/R2025b"
+
+model=CartControl.elf
+modelpgm=CartControlPiMod2.elf
+ln -s  $sourcedir/$modelpgm $destdir/$model
+
+model=CartIdent.elf
+modelpgm=CartIdentPiMod2.elf
+ln -s  $sourcedir/$modelpgm $destdir/$model
+
+model=CraneIdent.elf
+modelpgm=CraneIdentPiMod2.elf
+ln -s  $sourcedir/$modelpgm $destdir/$model
+
+model=CraneStab.elf
+modelpgm=CraneStabPiMod2.elf
+ln -s  $sourcedir/$modelpgm $destdir/$model
+
+model=InvPendIdent.elf
+modelpgm=InvPendIdentPiMod2.elf
+ln -s  $sourcedir/$modelpgm $destdir/$model
+
+model=PendStabPD.elf
+modelpgm=PendStabPDPiMod2.elf
+ln -s  $sourcedir/$modelpgm $destdir/$model
+
+model=PendSwingUp.elf
+modelpgm=PendSwingUpPiMod2.elf
+ln -s  $sourcedir/$modelpgm $destdir/$model
+
+model=PendulumFriction.elf
+modelpgm=PendulumFrictionPiMod2.elf
+ln -s  $sourcedir/$modelpgm $destdir/$model
+
+model=SwingHoldPendulumExira.elf
+modelpgm=SwingHoldPendulumExtraPiMod2.elf
+ln -s  $sourcedir/$modelpgm $destdir/$model
+
+model=SwingHoldPendulum.elf
+modelpgm=SwingHoldPendulumPiMod2.elf
+ln -s  $sourcedir/$modelpgm $destdir/$model
+
+model=UpDownPendulum.elf
+modelpgm=UpDownPendulumPiMod2.elf
+ln -s  $sourcedir/$modelpgm $destdir/$model
+
+
