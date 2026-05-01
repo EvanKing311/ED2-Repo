@@ -281,9 +281,30 @@ def experiment_run_dynamic(request, experiment_name):
         'parameters': parameters,  # PASS PARAMETERS TO TEMPLATE
         'recent_commands': recent_commands,
         'raspi_messages': raspi_messages,
+        'is_instructor': request.user.is_instructor,
     }
     
     return render(request, 'MatlabApp/experiment_run_dynamic.html', context)
+
+@login_required
+def estop(request):
+    # Only instructors can use estop
+    if not request.user.is_instructor:
+        return JsonResponse({'error': 'Not authorized'}, status=403)
+
+    # Clear whoever currently holds the lock
+    ControlLock.objects.all().delete()
+
+    # Give the instructor control
+    if not request.session.session_key:
+        request.session.save()
+
+    ControlLock.objects.create(
+        session_key=request.session.session_key,
+        user=str(request.user)
+    )
+
+    return JsonResponse({'status': 'estop_ok'})
 
 @login_required
 @requires_control_lock

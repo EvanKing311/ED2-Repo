@@ -215,6 +215,17 @@
                             onclick="stopExperiment()">
                         STOP
                     </button>
+                    {% if is_instructor %}
+                    <div class="mt-2">
+                        <button type="button"
+                                class="btn btn-danger w-100"
+                                id="estopBtn"
+                                style="font-size: 1rem; padding: 10px; font-weight: bold; border-radius: 8px; border: 2px solid #050000;"
+                                onclick="triggerEstop()">
+                            E-STOP
+                        </button>
+                    </div>
+                    {% endif %}
                 </div>
             </form>
         </div>
@@ -427,6 +438,42 @@ const CONTROL_ELEMENTS = [
 function getEditableParamInputs() {
     return document.querySelectorAll('.param-input:not([readonly]):not([disabled])');
 }
+
+async function triggerEstop() {
+    try {
+        const res = await fetch('/control/estop/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrfToken() }
+        });
+        const data = await res.json();
+
+        if (data.status === 'estop_ok') {
+            // Give instructor control first so sendCommand works
+            iAmInControl = true;
+            // Stop the experiment on the Pi
+            fetch('{% url "send_experiment_command" experiment_name %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({ command: 'sto', parameters: {} })
+            });
+            // Update full UI state
+            setControlMode(true);
+            startHeartbeat();
+            // Clear any running state
+            experimentRunning = false;
+            updateUIState();
+            document.getElementById('paramStatus').textContent = 'Stopped';
+            document.getElementById('paramStatus').classList.remove('bg-warning');
+            document.getElementById('paramStatus').classList.add('bg-light', 'text-dark');
+        }
+    } catch (err) {
+        console.error('E-Stop error:', err);
+    }
+}
+
 
 //Control lock — acquire / release / heartbeat
 //Heartbeat to see if user is active, acquire lock when first in queue, release lock on inactivity or tab close
@@ -644,9 +691,8 @@ function recenterExperiment() {
     }
 }
 
-// ─────────────────────────────────────────────
+
 //  UI state — combines lock state + running state
-// ─────────────────────────────────────────────
 function updateUIState() {
     const parametersBody = document.getElementById('parametersBody');
 
@@ -657,9 +703,7 @@ function updateUIState() {
     }
 }
 
-// ─────────────────────────────────────────────
 //  Send command to Django view
-// ─────────────────────────────────────────────
 function sendCommand(command, parameters = {}) {
     if (!iAmInControl) return;
 

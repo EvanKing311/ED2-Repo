@@ -3,6 +3,7 @@ from django.db import models
 
 class CustomUser(AbstractUser):
     is_viewer = models.BooleanField(default=False)
+    is_instructor = models.BooleanField(default=False)
     ROLE_CHOICES = [
         ('student', 'Student'),
         ('instructor', 'Instructor'),

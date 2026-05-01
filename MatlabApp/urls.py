@@ -23,6 +23,9 @@ urlpatterns = [
     path('experiment/<str:experiment_name>/params/', views.update_experiment_params, name='update_experiment_params'),
     path('experiment/<str:experiment_name>/defaults/', views.get_experiment_defaults, name='get_experiment_defaults'),
 
+    #Emergency stop
+    path('control/estop/', views.estop, name='estop'),
+
     #Control Lock URLs
     path('control/acquire/', views.acquire_lock, name='acquire_lock'),
     path('control/release/', views.release_lock, name='release_lock'),
