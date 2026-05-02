@@ -1,0 +1,24 @@
+%% matlab_file_listener.m
+% Periodically read the command file written by Django and display as table
+
+commandFile = 'C:\Users\kinge\EGNS\MatlabApp\commands.csv';  % <-- full path to the file
+
+% Create an initial empty table variable in workspace
+commandsTable = table([], 'VariableNames', {'Command'});
+
+% Keep MATLAB running and refresh the table every second
+while true
+    if isfile(commandFile)
+        % Read commands from file
+        cmds = readtable(commandFile, 'ReadVariableNames', false);
+        cmds.Properties.VariableNames = {'Command'};  % name column
+        commandsTable = cmds;  % update table variable
+    end
+    % Open Variable Editor if not already open (first iteration)
+    try
+        openvar('commandsTable')
+    catch
+        % Already open
+    end
+    pause(1)  % refresh every second
+end

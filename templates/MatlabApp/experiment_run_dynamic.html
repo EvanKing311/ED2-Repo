@@ -1,0 +1,1040 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ experiment_name }} - EGN Site{% endblock %}
+
+{% block extra_css %}
+<style>
+    .camera-feed-container {
+        background-color: #000;
+        border-radius: 8px;
+        overflow: hidden;
+        position: relative;
+        width: fit-content;
+        max-width: 100%;
+        margin: 0 auto;
+     }
+        
+    .camera-card {
+        width: 100%;
+    }
+    .control-btn {
+        font-size: 1.2rem;
+        padding: 18px;
+        font-weight: bold;
+        border-radius: 8px;
+    }
+    
+    .param-input {
+        font-size: 1.1rem;
+        padding: 10px;
+    }
+    
+    .disabled-overlay {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+
+    /* Control lock status banner */
+    #controlStatusBanner {
+        font-size: 0.95rem;
+        font-weight: 500;
+        padding: 8px 14px;
+        border-radius: 6px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Main layout grid */
+    .main-layout {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-rows: auto 1fr;
+        gap: 16px;
+        align-items: start;
+    }
+
+    .video-column {
+        grid-column: 1;
+        grid-row: 1 / span 2;
+        min-width: 0;
+    }
+
+    .controls-column {
+        grid-column: 2;
+        grid-row: 1;
+        width: 320px;
+    }
+
+    .params-column {
+        grid-column: 2;
+        grid-row: 2;
+        width: 320px;
+        align-self: start;
+    }
+
+    /* Parameters panel — no scrollbar, compact rows */
+    #parametersBody {
+        overflow: visible;
+    }
+
+    /* Inline parameter row: label left, input right */
+    .param-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 0.4rem;
+    }
+
+    .param-row .param-label {
+        flex: 1;
+        font-weight: 600;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        margin: 0;
+    }
+
+    .param-row .param-label small {
+        font-weight: 400;
+    }
+
+    .param-row .param-input {
+        width: 90px;
+        flex-shrink: 0;
+        font-size: 0.85rem;
+        padding: 4px 8px;
+        text-align: center;
+    }
+
+    /* PID group header */
+    .param-group-header {
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6c757d;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 3px;
+        margin-top: 0.6rem;
+        margin-bottom: 0.4rem;
+    }
+
+    /* Thin controls bar */
+    .controls-bar {
+        display: flex;
+        gap: 10px;
+    }
+
+    .controls-bar .control-btn {
+        flex: 1;
+        font-size: 1rem;
+        padding: 10px;
+        font-weight: bold;
+        border-radius: 8px;
+    }
+
+    /* Live charts */
+    .chart-wrapper {
+        position: relative;
+        height: 200px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header with Back Button -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary mb-2">
+                ← Back to Experiments
+            </a>
+            <h2 class="mb-1">{{ experiment_name }}</h2>
+            <p class="text-muted">Configure parameters and run the experiment</p>
+        </div>
+    </div>
+
+    <!-- Main layout: video + controls on left, params on right -->
+    <div class="main-layout">
+
+        <!-- Video Feed -->
+        <div class="video-column">
+            <div class="card shadow camera-card">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">🔴 Live Camera Feed</h5>
+                    <span class="badge bg-success" id="streamStatus">LIVE</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="camera-feed-container">
+                        <video id="cameraStream" 
+                            autoplay 
+                            muted
+                            playsinline
+                            style="display: block; max-width: 100%; height: auto;">
+                        </video>
+                        <div id="streamError" class="text-center p-5" style="display: none; background-color: #1a1a1a; position: absolute; top: 0; left: 0; right: 0; bottom: 0;">
+                            <p class="text-light mb-3">Camera feed unavailable</p>
+                            <button class="btn btn-sm btn-primary" onclick="reloadStream()">
+                                Retry
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Experiment Controls -->
+        <div class="controls-column">
+            <!-- Control lock status banner -->
+            <div id="controlStatusBanner" class="alert alert-danger mb-2" style="display:none;">
+                <span id="controlStatusText">View only — another user is in control</span>
+            </div>
+
+            <!-- Inactivity banner -->
+            <div id="inactivityBanner" class="alert alert-warning mb-2" style="display:none;">
+                <span>You have been kicked for inactivity.</span>
+                <button class="btn btn-sm btn-primary ms-2" onclick="requestControl()">
+                    Request Control
+                </button>
+            </div>
+
+            <!-- Start/Stop Buttons -->
+            <form method="POST" id="controlForm">
+                {% csrf_token %}
+                <div class="controls-bar">
+                    <button type="button"
+                            class="btn btn-success control-btn"
+                            id="startBtn"
+                            onclick="startExperiment()">
+                        START
+                    </button>
+                    <button type="button"
+                            class="btn btn-danger control-btn"
+                            id="stopBtn"
+                            onclick="stopExperiment()">
+                        STOP
+                    </button>
+                    {% if is_instructor %}
+                    <div class="mt-2">
+                        <button type="button"
+                                class="btn btn-danger w-100"
+                                id="estopBtn"
+                                style="font-size: 1rem; padding: 10px; font-weight: bold; border-radius: 8px; border: 2px solid #050000;"
+                                onclick="triggerEstop()">
+                            E-STOP
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+
+        <!-- Parameters (right column, spans both rows) -->
+        <div class="params-column">
+            <div class="card shadow" id="parametersCard">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Experiment Parameters</h5>
+                    <span class="badge bg-light text-dark" id="paramStatus">Ready</span>
+                </div>
+                <div class="card-body" id="parametersBody">
+                    {% if parameters %}
+                    <form method="POST" id="paramForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update_parameters">
+
+                        {% for param_key, param_config in parameters.items %}
+
+                            {% if param_config.value is not None or param_config.editable is not None %}
+                                <!-- FLAT parameter (has value/editable keys directly) -->
+                                <div class="param-row">
+                                    <label class="param-label" for="{{ param_key }}">
+                                        {{ param_key|title }}
+                                        {% if param_config.unit %}
+                                            <small class="text-muted">({{ param_config.unit }})</small>
+                                        {% endif %}
+                                    </label>
+
+                                    {% if param_config.editable %}
+                                        <input type="text"
+                                               class="form-control param-input"
+                                               name="{{ param_key }}"
+                                               id="{{ param_key }}"
+                                               value="{{ param_config.value }}"
+                                               data-default="{{ param_config.value }}"
+                                               required>
+                                    {% else %}
+                                        <input type="text"
+                                               class="form-control param-input bg-light"
+                                               name="{{ param_key }}"
+                                               id="{{ param_key }}"
+                                               value="{{ param_config.value }}"
+                                               data-default="{{ param_config.value }}"
+                                               readonly
+                                               disabled
+                                               style="cursor: not-allowed; opacity: 0.6;">
+                                    {% endif %}
+                                </div>
+
+                            {% else %}
+                                <!-- Nested param group for PID_D, PID_D1 -->
+                                <div class="param-group-header">{{ param_key }}</div>
+
+                                {% for sub_key, sub_config in param_config.items %}
+                                <div class="param-row">
+                                    <label class="param-label" for="{{ param_key }}_{{ sub_key }}">
+                                        {{ sub_key|title }}
+                                        {% if sub_config.unit %}
+                                            <small class="text-muted">({{ sub_config.unit }})</small>
+                                        {% endif %}
+                                    </label>
+
+                                    {% if sub_config.editable %}
+                                        <input type="text"
+                                               class="form-control param-input"
+                                               name="{{ param_key }}_{{ sub_key }}"
+                                               id="{{ param_key }}_{{ sub_key }}"
+                                               value="{{ sub_config.value }}"
+                                               data-default="{{ sub_config.value }}"
+                                               required>
+                                    {% else %}
+                                        <input type="text"
+                                               class="form-control param-input bg-light"
+                                               name="{{ param_key }}_{{ sub_key }}"
+                                               id="{{ param_key }}_{{ sub_key }}"
+                                               value="{{ sub_config.value }}"
+                                               data-default="{{ sub_config.value }}"
+                                               readonly
+                                               disabled
+                                               style="cursor: not-allowed; opacity: 0.6;">
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+
+                            {% endif %}
+
+                        {% endfor %}
+
+                        <!-- Parameter Buttons -->
+                        <div class="d-grid gap-2 mt-2">
+                            <button type="button" 
+                                    class="btn btn-primary btn-lg"
+                                    id="updateParamsBtn"
+                                    onclick="updateParameters()">
+                                  Update Parameters
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-outline-secondary"
+                                    id="restoreDefaultsBtn"
+                                    onclick="restoreDefaults()">
+                                Restore Defaults
+                            </button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <strong>No parameters configured</strong>
+                        <p class="mb-0">This experiment has no adjustable parameters.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Live Charts — now above recent activity -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Live Data</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <span id="wsStatus" class="badge bg-secondary">Connecting...</span>
+                        <button class="btn btn-sm btn-outline-light" onclick="clearCharts()">Clear</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Charts dynamically created -->
+                    <div id="chartsContainer" class="row">
+                        <p class="text-muted text-center mt-2" id="chartsPlaceholder">
+                            Waiting for data...
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status and Recent Activity — now below graphs -->
+    <div class="row mt-3">
+        <div class="col-lg-6 mb-3">
+            <div class="card shadow">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0">Recent Commands</h6>
+                </div>
+                <div class="card-body" style="max-height: 150px; overflow-y: auto;">
+                    {% if recent_commands %}
+                        {% for cmd in recent_commands|slice:":5" %}
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <code>{{ cmd.command }}</code>
+                            <small class="text-muted">{{ cmd.timestamp|date:"H:i:s" }}</small>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted mb-0">No commands yet</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-3">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">Data Readings</h6>
+                </div>
+                <div class="card-body" style="max-height: 150px; overflow-y: auto;">
+                    {% if raspi_messages %}
+                        {% for msg in raspi_messages|slice:":5" %}
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <small>{{ msg.message }}</small>
+                            <small class="text-muted">{{ msg.timestamp|date:"H:i:s" }}</small>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted mb-0">No messages</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!--JS Charts-->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// User State and inactivity timer
+let experimentRunning = false;
+let iAmInControl = false;
+let heartbeatInterval = null;
+let pollInterval = null;
+let inactivityTimer = null;
+const INACTIVITY_TIMEOUT = 2 * 60 * 1000; //2 minutes
+
+// ─────────────────────────────────────────────
+//Control elements to disable when user not in control
+const CONTROL_ELEMENTS = [
+    'startBtn',
+    'stopBtn',
+    'updateParamsBtn',
+    'restoreDefaultsBtn',
+];
+
+//Also disable every editable param-input (not just read only)
+function getEditableParamInputs() {
+    return document.querySelectorAll('.param-input:not([readonly]):not([disabled])');
+}
+
+async function triggerEstop() {
+    try {
+        const res = await fetch('/control/estop/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrfToken() }
+        });
+        const data = await res.json();
+
+        if (data.status === 'estop_ok') {
+            // Give instructor control first so sendCommand works
+            iAmInControl = true;
+            // Stop the experiment on the Pi
+            fetch('{% url "send_experiment_command" experiment_name %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({ command: 'sto', parameters: {} })
+            });
+            // Update full UI state
+            setControlMode(true);
+            startHeartbeat();
+            // Clear any running state
+            experimentRunning = false;
+            updateUIState();
+            document.getElementById('paramStatus').textContent = 'Stopped';
+            document.getElementById('paramStatus').classList.remove('bg-warning');
+            document.getElementById('paramStatus').classList.add('bg-light', 'text-dark');
+        }
+    } catch (err) {
+        console.error('E-Stop error:', err);
+    }
+}
+
+
+//Control lock — acquire / release / heartbeat
+//Heartbeat to see if user is active, acquire lock when first in queue, release lock on inactivity or tab close
+function getCsrfToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+
+async function acquireLock() {
+    try {
+        const res = await fetch('/control/acquire/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrfToken() }
+        });
+        const data = await res.json();
+
+        if (data.status === 'acquired' || data.status === 'already_yours') {
+            setControlMode(true);
+            startHeartbeat();
+        } else if (data.status === 'viewer') {
+            //Permanently view only (demo user)
+            setViewerMode()  
+        } else {
+            //Lock held by someone else
+            setControlMode(false);
+            startPolling();
+        }
+    } catch (err) {
+        console.error('acquireLock error:', err);
+        setControlMode(false);
+        startPolling();
+    }
+}
+
+/*SET VIEW ONLY MODE FOR VIEWER ACCOUNTS (CANNOT ACQUIRE CONTROL)*/
+function setViewerMode() {
+    iAmInControl = false;
+
+    CONTROL_ELEMENTS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = true;
+    });
+
+    getEditableParamInputs().forEach(el => {
+        el.disabled = true;
+    });
+
+    const banner = document.getElementById('controlStatusBanner');
+    const text   = document.getElementById('controlStatusText');
+    banner.style.display = 'flex';
+    banner.className = 'alert alert-secondary';
+    text.textContent = 'View only account - controls disabled';
+}
+
+async function releaseLock() {
+    try {
+        await fetch('/control/release/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrfToken() }
+        });
+    } catch (err) {
+        console.error('releaseLock error:', err);
+    }
+}
+
+function startHeartbeat() {
+    //clear any existing poll
+    if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+    }
+
+    heartbeatInterval = setInterval(async () => {
+        try {
+            const res = await fetch('/control/heartbeat/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCsrfToken() }
+            });
+            const data = await res.json();
+
+            if (data.status === 'lost') {
+                //Server no longer recognises our lock (admin clear)
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+                setControlMode(false);
+                startPolling();
+            }
+        } catch (err) {
+            console.error('Heartbeat error:', err);
+        }
+    }, 15000); //every 15 seconds
+}
+
+function startPolling() {
+    // Clear any existing heartbeat - no user control
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+    }
+
+    pollInterval = setInterval(async () => {
+        try {
+            const res = await fetch('/control/status/');
+            const data = await res.json();
+
+            if (!data.locked) {
+                //Lock is free, stop polling and try to grab it
+                clearInterval(pollInterval);
+                pollInterval = null;
+                acquireLock();
+            }
+        } catch (err) {
+            console.error('Poll error:', err);
+        }
+    }, 5000); //every 5 seconds
+}
+
+//  Inactivity timer resets on any control interaction, releases lock if time runs out
+function resetInactivityTimer() {
+    if (!iAmInControl) return;
+
+    if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+    }
+
+    inactivityTimer = setTimeout(() => {
+        //Timer up, release lock and switch to view only
+        releaseLock();
+        setControlMode(false);
+        startPolling();
+
+        // Hide regular banner, show inactivity banner
+        document.getElementById('controlStatusBanner').style.display = 'none';
+        document.getElementById('inactivityBanner').style.display = 'flex';
+    }, INACTIVITY_TIMEOUT);
+}
+
+async function requestControl() {
+    document.getElementById('inactivityBanner').style.display = 'none';
+    await acquireLock();
+}
+
+//  Control lock — UI mode switching
+function setControlMode(inControl) {
+    iAmInControl = inControl;
+
+    CONTROL_ELEMENTS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = !inControl;
+    });
+
+    getEditableParamInputs().forEach(el => {
+        el.disabled = !inControl;
+    });
+
+    const banner = document.getElementById('controlStatusBanner');
+    const text   = document.getElementById('controlStatusText');
+
+    if (inControl) {
+        banner.style.display = 'none';
+        document.getElementById('inactivityBanner').style.display = 'none';
+        resetInactivityTimer(); //start countdown when control gained
+    } else {
+        //Clear inactivity timer when control is lost
+        if (inactivityTimer) {
+            clearTimeout(inactivityTimer);
+            inactivityTimer = null;
+        }
+        banner.style.display = 'flex';
+        banner.className = 'alert alert-danger';
+        text.textContent = 'View only — another user is in control';
+    }
+
+    updateUIState();
+}
+
+// ─────────────────────────────────────────────
+//  Experiment control functions
+// ─────────────────────────────────────────────
+function startExperiment() {
+    if (!iAmInControl) return;
+    resetInactivityTimer();
+    experimentRunning = true;
+    updateUIState();
+
+    // Collect current parameter values from the form
+    const params = {};
+    document.querySelectorAll('#paramForm .param-input:not([disabled]):not([readonly])').forEach(input => {
+        params[input.name] = input.value;
+    });
+
+    sendCommand('sta', params);
+
+    document.getElementById('paramStatus').textContent = 'Running';
+    document.getElementById('paramStatus').classList.remove('bg-light', 'text-dark');
+    document.getElementById('paramStatus').classList.add('bg-warning', 'text-dark');
+}
+
+function stopExperiment() {
+    if (!iAmInControl) return;
+    resetInactivityTimer();
+    experimentRunning = false;
+    updateUIState();
+    sendCommand('sto');
+    
+    document.getElementById('paramStatus').textContent = 'Stopped';
+    document.getElementById('paramStatus').classList.remove('bg-warning');
+    document.getElementById('paramStatus').classList.add('bg-light', 'text-dark');
+}
+
+function recenterExperiment() {
+    if (!iAmInControl) return;
+    resetInactivityTimer();
+    if (!experimentRunning) {
+        sendCommand('rec');
+    }
+}
+
+
+//  UI state — combines lock state + running state
+function updateUIState() {
+    const parametersBody = document.getElementById('parametersBody');
+
+    if (experimentRunning) {
+        parametersBody.classList.add('disabled-overlay');
+    } else {
+        parametersBody.classList.remove('disabled-overlay');
+    }
+}
+
+//  Send command to Django view
+function sendCommand(command, parameters = {}) {
+    if (!iAmInControl) return;
+
+    fetch('{% url "send_experiment_command" experiment_name %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({ command: command, parameters: parameters })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Command sent:', data);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+
+// ─────────────────────────────────────────────
+//  Parameter functions
+// ─────────────────────────────────────────────
+function updateParameters() {
+    if (!iAmInControl) return;
+    resetInactivityTimer();
+
+    if (experimentRunning) {
+        alert('Cannot update parameters while experiment is running. Please stop the experiment first.');
+        return;
+    }
+    
+    const formData = new FormData(document.getElementById('paramForm'));
+    const params = {};
+    
+    formData.forEach((value, key) => {
+        if (key !== 'action' && key !== 'csrfmiddlewaretoken') {
+            params[key] = value;
+        }
+    });
+    
+    fetch('{% url "update_experiment_params" experiment_name %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({ parameters: params })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Updated parameters:', data);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error updating parameters');
+    });
+}
+
+function restoreDefaults() {
+    if (!iAmInControl) return;
+    resetInactivityTimer();
+
+    if (experimentRunning) {
+        alert('Cannot restore defaults while experiment is running.');
+        return;
+    }
+
+    document.querySelectorAll('.param-input').forEach(input => {
+        const defaultValue = input.getAttribute('data-default');
+        if (defaultValue) {
+            input.value = defaultValue;
+        }
+    });
+
+    updateParameters();
+}
+
+// ─────────────────────────────────────────────
+//  Camera / HLS stream --> replaced with webrtc
+// ─────────────────────────────────────────────
+function initStream() {
+	const video = document.getElementById('cameraStream');
+	document.getElementById('streamError').style.display = 'none';
+	document.getElementById('streamStatus').textContent = 'CONNECTING...';
+	document.getElementById('streamStatus').className = 'badge bg-warning';
+
+	const pc = new RTCPeerConnection();
+	pc.addTransceiver('video', { direction: 'recvonly' });
+
+	pc.addEventListener('track', (evt) => {
+		if (evt.receiver) {
+			try { evt.receiver.jitterBufferTarget = 0; } catch(e) {}
+		}
+		video.srcObject = evt.streams[0];
+		video.play();
+		document.getElementById('streamStatus').textContent = 'LIVE';
+		document.getElementById('streamStatus').className = 'badge bg-success';
+	});
+	
+	pc.addEventListener('connectionstatechange', () => {
+		if (['failed', 'disconnected'].includes(pc.connectionState)) {
+			document.getElementById('streamStatus').textContent = 'OFFLINE';
+			document.getElementById('streamStatus').className = 'badge bg-danger';
+			setTimeout(() => {
+				if(window.peerConnection) { window.peerConnection.close(); }
+				initStream();
+			}, 2000);
+		}
+	});
+
+	pc.createOffer()
+		.then(offer => pc.setLocalDescription(offer))
+		.then(() => fetch('/stream/whep/', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/sdp' },
+			body: pc.localDescription.sdp
+		}))
+		.then(r => r.text())
+		.then(sdp => pc.setRemoteDescription({ type: 'answer', sdp }))
+		.catch(err => {
+			console.error('WebRTC error:', err);
+			document.getElementById('streamStatus').textContent = 'OFFLINE';
+			document.getElementById('streamStatus').className = 'badge bg-danger';
+			document.getElementById('streamError').style.display = 'block';
+		});
+		
+	window.peerConnection = pc;
+}
+
+function reloadStream() {
+	if (window.peerConnection) { window.peerConnection.close(); }
+	initStream();
+}
+
+// ─────────────────────────────────────────────
+//  Live charts — dynamic, key-driven
+// ─────────────────────────────────────────────
+const MAX_POINTS = 200; // rolling window of data points per chart
+
+// Map of key → Chart.js instance, created on first data arrival
+const activeCharts = {};
+
+// Colors assigned in order to each new key that appears
+const CHART_COLORS = [
+    '#0d6efd', // blue
+    '#198754', // green
+    '#dc3545', // red
+    '#fd7e14', // orange
+    '#6f42c1', // purple
+    '#20c997', // teal
+];
+let colorIndex = 0;
+
+function createChart(key) {
+    // Remove placeholder text on first chart creation
+    const placeholder = document.getElementById('chartsPlaceholder');
+    if (placeholder) placeholder.remove();
+
+    // Create a col div containing a canvas
+    const container = document.getElementById('chartsContainer');
+    const col = document.createElement('div');
+    col.className = 'col-md-6 mb-3';
+    col.id = `chart-col-${key}`;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'chart-wrapper';
+
+    const canvas = document.createElement('canvas');
+    canvas.id = `chart-${key}`;
+    wrapper.appendChild(canvas);
+    col.appendChild(wrapper);
+    container.appendChild(col);
+
+    // Pick next color
+    const color = CHART_COLORS[colorIndex % CHART_COLORS.length];
+    colorIndex++;
+
+    // Format the key as a readable label (underscores -> spaces, title case)
+    const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+    const chart = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: label,
+                data: [],
+                borderColor: color,
+                borderWidth: 1.5,
+                pointRadius: 0,
+                tension: 0.3,
+                fill: false,
+            }]
+        },
+        options: {
+            animation: false,
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    display: true,
+                    title: { display: true, text: 'Time (s)' },
+                    ticks: { maxTicksLimit: 8 }
+                },
+                y: {
+                    display: true,
+                    title: { display: true, text: label }
+                }
+            },
+            plugins: {
+                legend: { display: true }
+            }
+        }
+    });
+
+    activeCharts[key] = chart;
+}
+
+function pushToChart(chart, t, value) {
+    chart.data.labels.push(t);
+    chart.data.datasets[0].data.push(value);
+
+    // Rolling window — drop oldest point when limit reached
+    if (chart.data.labels.length > MAX_POINTS) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+    }
+
+    chart.update('none'); // skip animation for speed
+}
+
+function clearCharts() {
+    Object.values(activeCharts).forEach(chart => {
+        chart.data.labels = [];
+        chart.data.datasets[0].data = [];
+        chart.update('none');
+    });
+}
+
+// ─────────────────────────────────────────────
+//  Message buffer — throttles chart redraws to
+//  10x per second regardless of incoming rate
+// ─────────────────────────────────────────────
+const messageBuffer = [];
+const CHART_UPDATE_INTERVAL = 100; // ms — redraw charts 10x per second
+
+setInterval(() => {
+    if (messageBuffer.length === 0) return;
+
+    const data = messageBuffer[messageBuffer.length - 1];
+    messageBuffer.length = 0;
+
+    try {
+        const t = data.time !== undefined ? parseFloat(data.time.toFixed(2)) : new Date().toLocaleTimeString();
+        
+        Object.entries(data).forEach(([key, value]) => {
+            if (key === 'time') return;
+            if (typeof value !== 'number') return;
+            if (!activeCharts[key]) {
+                createChart(key);
+            }
+            pushToChart(activeCharts[key], t, value);
+        });
+    } catch(err) {
+        console.error('Chart update error:', err);
+    }
+}, CHART_UPDATE_INTERVAL);
+
+// ─────────────────────────────────────────────
+//  WebSocket — receives sensor data from server
+// ─────────────────────────────────────────────
+let sensorSocket = null;
+
+function initWebSocket() {
+    const wsUrl = 'wss://' + window.location.host + '/ws/sensor/';
+    sensorSocket = new WebSocket(wsUrl);
+
+    sensorSocket.onopen = function() {
+        document.getElementById('wsStatus').textContent = 'Connected';
+        document.getElementById('wsStatus').className = 'badge bg-success';
+    };
+
+    sensorSocket.onclose = function() {
+        document.getElementById('wsStatus').textContent = 'Disconnected';
+        document.getElementById('wsStatus').className = 'badge bg-danger';
+        // Reconnect after 3 seconds
+        setTimeout(initWebSocket, 3000);
+    };
+
+    sensorSocket.onerror = function() {
+        document.getElementById('wsStatus').textContent = 'Error';
+        document.getElementById('wsStatus').className = 'badge bg-danger';
+    };
+
+    sensorSocket.onmessage = function(e) {
+        const outer = JSON.parse(e.data);
+        let data = outer.data || outer;
+
+        // If still wrapped as raw string, parse it
+        if (data.raw !== undefined) {
+            try {
+                // Fix unquoted keys and parse
+                const fixed = data.raw.replace(/(\{|,)\s*(\w+)\s*:/g, '$1"$2":');
+                data = JSON.parse(fixed);
+            } catch(err) {
+                return; // genuinely unparseable, skip
+            }
+        }
+
+        messageBuffer.push(data);
+    };
+}
+
+// ─────────────────────────────────────────────
+//  Release lock when tab/browser closes
+// ─────────────────────────────────────────────
+window.addEventListener('beforeunload', () => {
+    if (iAmInControl) {
+        navigator.sendBeacon('/control/release/');
+    }
+});
+
+// ─────────────────────────────────────────────
+//  Init on page load
+// ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    initStream();
+    acquireLock();       // Try to take control; falls back to view-only automatically
+    updateUIState();     // Set initial button states
+    initWebSocket();     // Connect to live data WebSocket
+});
+</script>
+{% endblock %}

@@ -1,0 +1,39 @@
+%MQTT listener
+
+brokerHost = "localhost";
+brokerPort = 1883;
+topic      = "django/commands";
+brokerURI = sprintf("tcp://%s:%d", brokerHost, brokerPort);
+
+%clear old MQTT connections
+clear mqttClient sub
+
+%connect to the broker
+mqttClient = mqttclient(brokerURI);
+
+% Subscribe to the topic
+sub = subscribe(mqttClient, topic);
+
+% Initialize a table to store commands
+commands = table([], [], [], 'VariableNames', {'Timestamp', 'Topic', 'Message'});
+
+disp("Listening for commands on '" + topic + "' ...");
+
+messages = [];
+
+while true
+   peek(mqttClient)
+   if ~isempty(messages)
+        %add message to the table
+        newEntry = {datetime('now'), msg.Topic, string(msg.Data)};
+        commands = [commands; newEntry]; 
+
+        %display in Command Window
+        fprintf("Received command: %s (%s)\n", msg.Data, string(datetime('now')));
+
+        %update variable in base workspace so you can see it live
+        assignin('base', 'commands', commands);
+    end
+
+    pause(1); 
+end
