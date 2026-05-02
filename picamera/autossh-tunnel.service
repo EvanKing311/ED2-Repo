@@ -1,0 +1,21 @@
+[Unit]
+Description=Reverse SSH Tunnel to Oracle Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStartPre=/bin/sleep 15
+ExecStart=/usr/bin/autossh -M 0 -N \
+  -o "ServerAliveInterval=30" \
+  -o "ServerAliveCountMax=3" \
+  -o "ExitOnForwardFailure=yes" \
+  -o "StrictHostKeyChecking=no" \
+  -R 2222:localhost:22 \
+  -i /home/skylar/.ssh/id_ed25519 \
+  opc@sciencelabtoyou.com
+Restart=always
+RestartSec=10
+User=skylar
+
+[Install]
+WantedBy=multi-user.target
